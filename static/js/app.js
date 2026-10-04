@@ -273,11 +273,11 @@ document.addEventListener('DOMContentLoaded', () => {
       scene.add(earthGroup);
 
       const textureLoader = new THREE.TextureLoader();
-      const dayMap = textureLoader.load('/static/assets/earth_day_4k.jpg');
-      const nightMap = textureLoader.load('/static/assets/earth_lights_4k.png');
-      const specularMap = textureLoader.load('/static/assets/earth_specular_4k.jpg');
-      const normalMap = textureLoader.load('/static/assets/earth_normal_4k.jpg');
-      const cloudMap = textureLoader.load('/static/assets/earth_clouds_4k.png');
+      const dayMap = textureLoader.load('/static/assets/earth_day_2k.jpg');
+      const nightMap = textureLoader.load('/static/assets/earth_lights_2k.png');
+      const specularMap = textureLoader.load('/static/assets/earth_specular_2k.jpg');
+      const normalMap = textureLoader.load('/static/assets/earth_normal_2k.jpg');
+      const cloudMap = textureLoader.load('/static/assets/earth_clouds_1k.png');
 
       [dayMap, nightMap, specularMap, normalMap, cloudMap].forEach(tex => {
         if (tex) {
