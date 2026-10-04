@@ -1101,13 +1101,196 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // 5. WebSocket Telemetry Stream Consumer & Evidence Strip Updater
+  // 5. WebSocket Telemetry Stream Consumer & Standalone Simulation Engine
   // =========================================================================
+  let clientSimInterval = null;
+
+  function initClientSimulation() {
+    if (clientSimInterval) return;
+
+    let simT = 0;
+    let trueX = 330.0;
+    let trueY = 235.0;
+    let estX = 330.0;
+    let estY = 235.0;
+    let estVx = 0.0;
+    let estVy = 0.0;
+    let gPan = 0.0;
+    let gTilt = 0.0;
+    let frameId = 0;
+
+    // Pre-generate background starfield
+    const stars = [];
+    for (let i = 0; i < 45; i++) {
+      stars.push({
+        x: Math.random() * 640,
+        y: Math.random() * 480,
+        r: Math.random() * 1.2 + 0.5,
+        alpha: Math.random() * 0.5 + 0.3
+      });
+    }
+
+    clientSimInterval = setInterval(() => {
+      // If live WebSocket is connected, pause client-side standalone loop
+      if (state.wsConnected) return;
+      if (state.isPaused) return;
+
+      const canvas = document.getElementById('cameraFeedCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const dt = 0.033;
+      simT += dt;
+      frameId++;
+
+      // Trajectory dynamics based on selected scenario
+      const traj = state.trajectory || 'LEO_PASS';
+      let speedMult = state.targetProfiles[state.currentTargetIdx]?.speed || 1.0;
+      let targetSize = state.targetProfiles[state.currentTargetIdx]?.size || 6.0;
+
+      let targetX = 320;
+      let targetY = 240;
+
+      if (traj === 'LEO_PASS') {
+        const rad = 75.0;
+        targetX = 320 + Math.sin(simT * 0.45 * speedMult) * rad;
+        targetY = 240 + Math.cos(simT * 0.35 * speedMult) * (rad * 0.65);
+      } else if (traj === 'CIRCULAR') {
+        const rad = 60.0;
+        targetX = 320 + Math.cos(simT * 0.6 * speedMult) * rad;
+        targetY = 240 + Math.sin(simT * 0.6 * speedMult) * rad;
+      } else if (traj === 'FIGURE_8') {
+        const rad = 70.0;
+        targetX = 320 + Math.sin(simT * 0.7 * speedMult) * rad;
+        targetY = 240 + Math.sin(simT * 1.4 * speedMult) * (rad * 0.5);
+      } else {
+        // Turbulent / Random walk
+        targetX = 320 + Math.sin(simT * 0.5) * 50 + (Math.random() - 0.5) * 6;
+        targetY = 240 + Math.cos(simT * 0.5) * 40 + (Math.random() - 0.5) * 6;
+      }
+
+      // Add disturbance jitter if active
+      if (state.jitterActive) {
+        targetX += (Math.random() - 0.5) * 8.0;
+        targetY += (Math.random() - 0.5) * 8.0;
+      }
+
+      // Slew simulated gimbal closed-loop toward target
+      const errPan = (targetX - 320) * 0.04;
+      const errTilt = (240 - targetY) * 0.04;
+      gPan += errPan * dt * 5.0;
+      gTilt += errTilt * dt * 5.0;
+
+      trueX = targetX;
+      trueY = targetY;
+
+      // 2D Kalman filter measurement & prediction
+      const isOccluded = state.occlusionActive || false;
+      let trackState = 'MEASURED';
+      let measX = trueX + (Math.random() - 0.5) * 1.5;
+      let measY = trueY + (Math.random() - 0.5) * 1.5;
+
+      if (isOccluded) {
+        trackState = 'PREDICTED';
+        measX = null;
+        measY = null;
+        estX += estVx * dt;
+        estY += estVy * dt;
+      } else {
+        const K = 0.35; // Kalman gain
+        const predX = estX + estVx * dt;
+        const predY = estY + estVy * dt;
+        estVx = estVx + K * ((measX - predX) / dt - estVx);
+        estVy = estVy + K * ((measY - predY) / dt - estVy);
+        estX = predX + K * (measX - predX);
+        estY = predY + K * (measY - predY);
+      }
+
+      const trackingError = Math.hypot(estX - trueX, estY - trueY);
+      const pointingError = Math.hypot(estX - 320, estY - 240);
+      const r95 = isOccluded ? 3.2 : (0.85 + (state.noiseActive ? 0.6 : 0.0));
+
+      // 1. Render Synthetic Greyscale Optical Frame
+      ctx.fillStyle = '#080A0C';
+      ctx.fillRect(0, 0, 640, 480);
+
+      // Faint background stars
+      stars.forEach(s => {
+        ctx.fillStyle = `rgba(180, 185, 195, ${s.alpha})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Optical target beacon (Gaussian spot)
+      if (!isOccluded) {
+        const grad = ctx.createRadialGradient(trueX, trueY, 0, trueX, trueY, targetSize * 3);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+        grad.addColorStop(0.3, 'rgba(240, 240, 255, 0.7)');
+        grad.addColorStop(0.7, 'rgba(180, 200, 240, 0.2)');
+        grad.addColorStop(1, 'rgba(100, 140, 220, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(trueX, trueY, targetSize * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Assemble synthetic telemetry message
+      const syntheticMsg = {
+        frame_id: frameId,
+        timestamp: simT,
+        frame_state: trackState,
+        track_state: isOccluded ? 'LOST' : 'TRACK',
+        action_type: isOccluded ? 'KALMAN_PREDICT' : 'FAST',
+        action_cost_ms: 0.32,
+        action_reason: 'Optimal closed-loop tracker',
+        measured_x: measX,
+        measured_y: measY,
+        estimated_x: estX,
+        estimated_y: estY,
+        estimated_vx: estVx,
+        estimated_vy: estVy,
+        uncertainty_r95: r95,
+        measurement_age_ms: 33.3,
+        artifact_verdict: 'CLEAN',
+        readiness: {
+          state: isOccluded ? 'LOST' : 'READY',
+          is_ready: !isOccluded && r95 < 2.0,
+          fresh_met: true,
+          cone_met: pointingError < 15.0,
+          assoc_met: true,
+          motion_met: true,
+          artifact_clean: true,
+          pointing_offset_px: pointingError,
+          reasons: []
+        },
+        gimbal_pan_deg: gPan,
+        gimbal_tilt_deg: gTilt,
+        gimbal_pan_rate: errPan,
+        gimbal_tilt_rate: errTilt,
+        true_x: trueX,
+        true_y: trueY,
+        tracking_error_px: trackingError,
+        pointing_error_px: pointingError,
+        is_occluded: isOccluded,
+        fps: 30.0,
+        mode: 'SIMULATION',
+        tracker: state.activeTracker || 'DRISHTI_PAT'
+      };
+
+      state.lastPacketTime = Date.now();
+      handleTelemetryUpdate(syntheticMsg);
+
+    }, 33);
+  }
+
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/telemetry`;
-    const canvas = document.getElementById('cameraFeedCanvas');
-    const ctx = canvas ? canvas.getContext('2d') : null;
+
+    // Initialize standalone simulation loop immediately so dashboard works anywhere (e.g. Vercel)
+    initClientSimulation();
 
     try {
       state.ws = new WebSocket(wsUrl);
@@ -1133,15 +1316,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.ws.onclose = () => {
         state.wsConnected = false;
-        setTimeout(connectWebSocket, 1500);
+        setTimeout(connectWebSocket, 3000);
       };
 
       state.ws.onerror = (err) => {
-        console.warn("WebSocket stream notice:", err);
+        // Fallback gracefully to standalone client simulation
+        state.wsConnected = false;
       };
 
     } catch (e) {
-      console.warn("WebSocket init error:", e);
+      state.wsConnected = false;
     }
   }
 
@@ -1163,14 +1347,20 @@ document.addEventListener('DOMContentLoaded', () => {
     drawEvidenceStrip();
 
     // 1. Draw Greyscale Camera Frame & Scientific HUD Overlays
-    if (ctx && data.frame_base64) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, 640, 480);
+    if (ctx) {
+      if (data.frame_base64) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, 640, 480);
+          renderHUDOverlays(ctx, data, trackState);
+        };
+        img.src = "data:image/jpeg;base64," + data.frame_base64;
+      } else {
+        // If rendered directly to canvas by standalone simulation, overlay HUD directly
         renderHUDOverlays(ctx, data, trackState);
-      };
-      img.src = "data:image/jpeg;base64," + data.frame_base64;
+      }
     }
+
 
 
     // 2. Update Header & Sub-Bar Readouts

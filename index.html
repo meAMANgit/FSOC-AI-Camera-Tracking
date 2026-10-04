@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Camera Tracking · SIH26169</title>
+  <meta name="description" content="AI-Based Virtual Camera Tracking System for Coarse Alignment of FSOC Terminals - Scientific Mission Control & Observatory Instrument">
+  
+  <!-- Google Fonts: IBM Plex Sans & IBM Plex Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Three.js and OrbitControls for 3D Space Orbit Visualization -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- App Layout -->
+  <div class="app-layout">
+
+    <!-- Top Navigation Header Bar (48px height) -->
+    <header class="top-header">
+      <!-- Left Branding -->
+      <div class="brand-group" id="brandLogo" title="Reset to Mission Dashboard">
+        <div class="brand-logo-glow">
+          <svg class="orbit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="9"/>
+            <ellipse cx="12" cy="12" rx="11" ry="4" transform="rotate(-30 12 12)"/>
+            <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.3"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Virtual Camera Tracking · SIH26169</span>
+          <span class="brand-code">FSOC COARSE ALIGNMENT</span>
+        </div>
+      </div>
+
+      <!-- Center Flow Breadcrumbs -->
+      <div class="header-breadcrumbs">
+        <span class="bc-step active" id="bcTrack">TRACK</span>
+        <span class="bc-dot">/</span>
+        <span class="bc-step active" id="bcDetect">DETECT</span>
+        <span class="bc-dot">/</span>
+        <span class="bc-step active" id="bcAlign">ALIGN</span>
+        <span class="bc-dot">/</span>
+        <span class="bc-step active" id="bcConnect">CONNECT</span>
+      </div>
+
+      <!-- Right System Status & Clocks -->
+      <div class="header-right-meta">
+        <div class="sys-badge-online" id="systemStatusBadge">
+          <span class="pulse-indicator"></span>
+          <span>ONLINE</span>
+        </div>
+
+        <div class="clock-display">
+          <span class="clock-date" id="liveDate">28 Apr 2026</span>
+          <span class="clock-time" id="liveTime">16:42:17</span>
+        </div>
+
+        <button class="icon-btn-header" id="btnThemeToggle" title="Toggle Light/Dark Theme (T)">
+          <span>🌓</span>
+          <span id="themeToggleText">Theme [T]</span>
+        </button>
+
+        <button class="icon-btn-settings" id="btnHeaderSettings" title="Mission Settings & Benchmark Suite">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="workspace-body">
+      
+      <!-- Left Rail Navigation (64px default, 200px on hover) -->
+      <aside class="sidebar-nav">
+        <nav class="nav-menu">
+          <button class="nav-item active" data-view="dashboard" id="navDashboard" title="Dashboard">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </span>
+            <span class="nav-label">Dashboard</span>
+          </button>
+          
+          <button class="nav-item" data-view="simulation" id="navSimulation" title="Simulation">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 1 9 9"></path><path d="M12 12 19 5"></path></svg>
+            </span>
+            <span class="nav-label">Simulation</span>
+          </button>
+
+          <button class="nav-item" data-view="camera" id="navCamera" title="Camera View">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            </span>
+            <span class="nav-label">Camera View</span>
+          </button>
+
+          <button class="nav-item" data-view="tracking" id="navTracking" title="Tracking">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+            </span>
+            <span class="nav-label">Tracking</span>
+          </button>
+
+          <button class="nav-item" data-view="analytics" id="navAnalytics" title="Analytics">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+            </span>
+            <span class="nav-label">Analytics</span>
+          </button>
+
+          <button class="nav-item" data-view="logs" id="navLogs" title="Logs">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            </span>
+            <span class="nav-label">Logs</span>
+          </button>
+
+          <button class="nav-item" data-view="settings" id="navSettings" title="Settings">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </span>
+            <span class="nav-label">Settings</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Main Observatory Grid Layout -->
+      <main class="main-grid">
+
+        <!-- ================= ROW 1: HERO VIRTUAL CAMERA FEED (7 COLS) + 3D SPACE ENVIRONMENT (5 COLS) ================= -->
+        <div class="grid-row row-top">
+
+          <!-- Card 1: Virtual Camera Feed (Hero Component) -->
+          <section class="card-panel panel-camera-feed">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                </span>
+                <h2 class="card-title">Virtual Camera Feed</h2>
+              </div>
+              <div class="live-pill" id="livePillBadge" title="Optical sensor feed mode">
+                <span class="live-dot"></span> <span id="livePillText">SIM</span>
+              </div>
+            </div>
+
+            <div class="camera-viewport-container" id="cameraViewportContainer">
+              <canvas id="cameraFeedCanvas" width="640" height="480" class="greyscale-feed"></canvas>
+
+              <!-- Reticle Corner Overlay Tags (12px mono) -->
+              <div class="cam-overlay-tag cam-tag-top-left" id="camTagTrack">Target (320.0, 240.0)</div>
+              <div class="cam-overlay-tag cam-tag-top-right" id="camTagAction">FAST · 0.3 ms</div>
+              <div class="cam-scale-bar-tag" id="camTagUncertainty">640 × 480 · 4° × 3° · r₉₅: 1.20 px</div>
+              <div class="cam-overlay-tag cam-tag-bot-right" id="camTagResidual">Res: 0.40 px</div>
+
+              <!-- Camera Feed Footer Sub-Bar -->
+              <div class="camera-card-footer">
+                <div class="feed-stat-pill feed-status-badge" id="feedTrackStatus">
+                  <span class="status-dot-green" id="trackStatusDot"></span>
+                  <span id="feedStatusText">MEASURED</span>
+                </div>
+                <div class="feed-stat-item">
+                  <span class="feed-lbl">FOV</span>
+                  <span class="feed-val" id="feedFovText">4.0° × 3.0°</span>
+                </div>
+                <div class="feed-stat-item">
+                  <span class="feed-lbl">Sensor</span>
+                  <span class="feed-val">640 × 480</span>
+                </div>
+                <div class="feed-confidence-bar" title="Detection Confidence">
+                  <div class="conf-fill" id="confBarFill" style="width: 92%;"></div>
+                </div>
+                <button class="btn-lock-state" id="btnLockIndicator" title="Click to trigger optical target lock">
+                  <span id="lockStatusText">LOCKED</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Evidence Strip: 300-Frame Track State Timeline -->
+            <div class="evidence-strip-container">
+              <span class="evidence-label">Evidence</span>
+              <canvas id="evidenceCanvas" width="300" height="10" title="Frame state history: Green=Measured, Blue=Predicted, Amber=Ambiguous, Red=Lost"></canvas>
+            </div>
+          </section>
+
+          <!-- Card 2: 3D Space Environment (Secondary Component) -->
+          <section class="card-panel panel-3d-space">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                </span>
+                <h2 class="card-title">3D Space Environment</h2>
+              </div>
+              <div class="view-mode-toggles">
+                <button class="btn-toggle-view active" id="btnView3D" title="Oblique 3D Orbital Perspective">3D</button>
+                <button class="btn-toggle-view" id="btnViewTop" title="Top-Down Orbit Normal View">Top</button>
+                <button class="btn-toggle-view" id="btnViewSide" title="Edge-On Orbital Plane View">Side</button>
+                <button class="btn-toggle-view" id="btnViewCloseup" title="Close-Up Terminal Satellite Scale">Close-up</button>
+                <button class="btn-toggle-view btn-fullscreen-view" id="btnFullscreen3D" title="Toggle Maximize 3D Orbit View">
+                  <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="space-viewport-container" id="spaceViewportContainer">
+              <!-- 3D Orbit Canvas -->
+              <canvas id="space3DCanvas"></canvas>
+
+              <!-- Top-Left Clean Key Legend (matching drawn markers) -->
+              <div class="hud-legend-card">
+                <div class="hud-legend-item">
+                  <span class="legend-symbol symbol-diamond"></span>
+                  <span class="hud-legend-lbl">Target Beacon</span>
+                </div>
+                <div class="hud-legend-item">
+                  <span class="legend-symbol symbol-square"></span>
+                  <span class="hud-legend-lbl">Your Terminal</span>
+                </div>
+                <div class="hud-legend-item">
+                  <span class="legend-symbol symbol-wedge"></span>
+                  <span class="hud-legend-lbl">Camera FOV</span>
+                </div>
+              </div>
+
+              <!-- Screen-Space Marker Leader Labels (Collision-Free) -->
+              <div class="hud-marker-tag tag-terminal" id="tagTerminalMarker" style="display:none;">
+                <span class="tag-marker-text" id="lblTerminalTag">Your Terminal</span>
+              </div>
+              <div class="hud-marker-tag tag-target" id="tagTargetMarker" style="display:none;">
+                <span class="tag-marker-text" id="lblTargetTag">Target Beacon</span>
+              </div>
+
+              <!-- Side View Altitude Ticks -->
+              <div class="hud-side-altitude-ticks" id="hudSideAltitudeTicks" style="display:none;">
+                <div class="alt-tick-item"><span class="alt-tick-line"></span><span class="alt-tick-lbl">550 km</span></div>
+                <div class="alt-tick-item"><span class="alt-tick-line"></span><span class="alt-tick-lbl">500 km</span></div>
+              </div>
+
+              <!-- Bottom-Left Flat Target Information Key (Computed Live) -->
+              <div class="hud-target-info">
+                <div class="hud-card-title">Geometry</div>
+                <div class="hud-card-row">
+                  <span class="hud-k">Distance</span>
+                  <span class="hud-v" id="hudDistance">842.6 km</span>
+                </div>
+                <div class="hud-card-row">
+                  <span class="hud-k">Rel. Speed</span>
+                  <span class="hud-v" id="hudRelVelocity">2.4 km/s</span>
+                </div>
+                <div class="hud-card-row">
+                  <span class="hud-k">Trajectory</span>
+                  <span class="hud-v" id="hudTrajectoryName">Circular (LEO)</span>
+                </div>
+                <div class="hud-card-row">
+                  <span class="hud-k">Target Alt.</span>
+                  <span class="hud-v" id="hudAltTarget">550.0 km</span>
+                </div>
+                <div class="hud-card-row">
+                  <span class="hud-k">Terminal Alt.</span>
+                  <span class="hud-v" id="hudAltTerminal">500.0 km</span>
+                </div>
+              </div>
+
+              <!-- NASA Imagery Credit (visible when Earth is displayed) -->
+              <div class="hud-nasa-credit" id="hudNasaCredit">Imagery: NASA</div>
+
+              <!-- Bottom-Right 3D Axis Triad Gizmo -->
+              <div class="hud-gizmo-wrap" id="hudGizmoWrap">
+                <canvas id="gizmo3DCanvas" width="56" height="56"></canvas>
+              </div>
+            </div>
+
+          </section>
+
+        </div>
+
+        <!-- ================= ROW 2: MISSION STATUS + CONTROL PANEL + DISTURBANCES + PERFORMANCE ================= -->
+        <div class="grid-row row-mid">
+
+          <!-- Card 3: Mission Status & Readiness Checklist -->
+          <section class="card-panel panel-mission-status">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                </span>
+                <h2 class="card-title">Mission Status</h2>
+              </div>
+            </div>
+
+            <div class="mission-status-body">
+              <!-- Stepper Pipeline -->
+              <div class="stepper-track">
+                <div class="step-node completed" id="stepSearchNode" title="Search state">
+                  <div class="step-circle">1</div>
+                  <span class="step-name">Search</span>
+                </div>
+                <div class="step-line active"></div>
+                <div class="step-node completed" id="stepAcquireNode" title="Acquire state">
+                  <div class="step-circle">2</div>
+                  <span class="step-name">Acquire</span>
+                </div>
+                <div class="step-line active"></div>
+                <div class="step-node current" id="stepTrackNode" title="Track state">
+                  <div class="step-circle">3</div>
+                  <span class="step-name">Track</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-node" id="stepLockNode" title="Lock state">
+                  <div class="step-circle">4</div>
+                  <span class="step-name">Lock</span>
+                </div>
+              </div>
+
+              <!-- Mode & Time Readout -->
+              <div class="mode-time-display">
+                <div class="mode-box">
+                  <span class="mode-lbl">Track State</span>
+                  <div class="mode-title-glow" id="lblCurrentMode">TRACKING</div>
+                </div>
+                <div class="time-box">
+                  <span class="mode-lbl">Elapsed Time</span>
+                  <div class="time-readout" id="lblTimeElapsed">00:01:42</div>
+                </div>
+              </div>
+
+              <!-- Readiness Mini Checklist (5 points) -->
+              <div class="readiness-checklist">
+                <div class="readiness-header">
+                  <span class="readiness-title">Readiness Assessment</span>
+                  <span class="readiness-badge" id="readinessBadge">READY</span>
+                </div>
+                <div class="readiness-item">
+                  <span class="readiness-dot active" id="chkFreshObs"></span>
+                  <span>Fresh observations (&lt; 50 ms)</span>
+                </div>
+                <div class="readiness-item">
+                  <span class="readiness-dot active" id="chkUncertainty"></span>
+                  <span>Uncertainty in range (r₉₅ &le; 2.5 px)</span>
+                </div>
+                <div class="readiness-item">
+                  <span class="readiness-dot active" id="chkAssoc"></span>
+                  <span>Association resolved (margin &ge; 1.5)</span>
+                </div>
+                <div class="readiness-item">
+                  <span class="readiness-dot active" id="chkMotion"></span>
+                  <span>Motion in range (&le; 10 px/s)</span>
+                </div>
+                <div class="readiness-item">
+                  <span class="readiness-dot active" id="chkWarning"></span>
+                  <span>No warning / fault conditions</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 4: Control Panel -->
+          <section class="card-panel panel-control-deck">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                </span>
+                <h2 class="card-title">Control Panel</h2>
+              </div>
+              <!-- Sub-tabs -->
+              <div class="ctrl-subtabs">
+                <button class="subtab-btn active" data-tab="camera">Camera</button>
+                <button class="subtab-btn" data-tab="target">Target</button>
+                <button class="subtab-btn" data-tab="disturbances">Disturbances</button>
+                <button class="subtab-btn" data-tab="presets">Presets</button>
+              </div>
+            </div>
+
+            <div class="control-deck-body">
+              
+              <!-- Tab 1: Camera Parameters (Default Active) -->
+              <div class="tab-pane-content" id="paneTabCamera">
+                <div class="ctrl-sliders-section">
+                  <div class="slider-row">
+                    <label class="slider-lbl">Pan</label>
+                    <input type="range" id="ctrlPanSlider" min="-45" max="45" step="0.5" value="12.4" class="custom-slider">
+                    <span class="slider-num-val" id="ctrlPanVal">12.4°</span>
+                  </div>
+
+                  <div class="slider-row">
+                    <label class="slider-lbl">Tilt</label>
+                    <input type="range" id="ctrlTiltSlider" min="-30" max="30" step="0.5" value="-3.2" class="custom-slider">
+                    <span class="slider-num-val" id="ctrlTiltVal">-3.2°</span>
+                  </div>
+
+                  <div class="slider-row">
+                    <label class="slider-lbl">FOV</label>
+                    <input type="range" id="ctrlFovSlider" min="2" max="25" step="0.5" value="4.0" class="custom-slider">
+                    <span class="slider-num-val" id="ctrlFovVal">4.0°</span>
+                  </div>
+
+                  <div class="init-pos-row">
+                    <span class="slider-lbl">Origin (X, Y, Z)</span>
+                    <div class="coord-inputs">
+                      <input type="number" id="initPosX" value="0" class="input-coord">
+                      <input type="number" id="initPosY" value="0" class="input-coord">
+                      <input type="number" id="initPosZ" value="0" class="input-coord">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- D-Pad Joystick -->
+                <div class="dpad-joystick-wrap">
+                  <div class="dpad-grid">
+                    <div></div>
+                    <button class="dpad-btn dpad-up" id="btnDpadUp" title="Tilt Up (+2.5°/s)">▲</button>
+                    <div></div>
+                    <button class="dpad-btn dpad-left" id="btnDpadLeft" title="Pan Left (-2.5°/s)">◀</button>
+                    <button class="dpad-btn dpad-center" id="btnDpadCenter" title="Center Boresight">●</button>
+                    <button class="dpad-btn dpad-right" id="btnDpadRight" title="Pan Right (+2.5°/s)">▶</button>
+                    <div></div>
+                    <button class="dpad-btn dpad-down" id="btnDpadDown" title="Tilt Down (-2.5°/s)">▼</button>
+                    <div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 2: Target Parameters -->
+              <div class="tab-pane-content" id="paneTabTarget" style="display:none; width:100%;">
+                <div class="ctrl-sliders-section" style="width:100%;">
+                  <div class="slider-row">
+                    <label class="slider-lbl">Speed</label>
+                    <input type="range" id="tabTargetSpeedSlider" min="0.5" max="8.0" step="0.1" value="2.4" class="custom-slider">
+                    <span class="slider-num-val" id="tabTargetSpeedVal">2.4 km/s</span>
+                  </div>
+                  <div class="slider-row">
+                    <label class="slider-lbl">Size</label>
+                    <input type="range" id="tabTargetSizeSlider" min="2" max="15" step="1" value="5" class="custom-slider">
+                    <span class="slider-num-val" id="tabTargetSizeVal">5 px</span>
+                  </div>
+                  <div class="slider-row">
+                    <label class="slider-lbl">Intensity</label>
+                    <input type="range" id="tabTargetIntensitySlider" min="100" max="255" step="5" value="220" class="custom-slider">
+                    <span class="slider-num-val" id="tabTargetIntensityVal">220</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 3: Disturbances Tab -->
+              <div class="tab-pane-content" id="paneTabDisturbances" style="display:none; width:100%;">
+                <div class="tab-grid-disturb">
+                  <button class="btn-quick-disturb" id="btnQuickNoise">Sensor Noise (15σ)</button>
+                  <button class="btn-quick-disturb" id="btnQuickJitter">Micro-Jitter (0.04°)</button>
+                  <button class="btn-quick-disturb" id="btnQuickCloud">Cloud Cover (2.0s)</button>
+                  <button class="btn-quick-disturb" id="btnQuickHotPixel">Hot Pixels (+6)</button>
+                </div>
+              </div>
+
+              <!-- Tab 4: Mission Presets Tab -->
+              <div class="tab-pane-content" id="paneTabPresets" style="display:none; width:100%;">
+                <div class="tab-grid-presets">
+                  <button class="btn-preset-card" data-preset="LEO_PASS">
+                    <span class="p-title">LEO Pass</span>
+                    <span class="p-desc">Satellite-to-Ground Optical Link</span>
+                  </button>
+                  <button class="btn-preset-card" data-preset="FIGURE_EIGHT">
+                    <span class="p-title">Figure-8</span>
+                    <span class="p-desc">Inter-Satellite Crosslink</span>
+                  </button>
+                  <button class="btn-preset-card" data-preset="TURBULENT">
+                    <span class="p-title">Turbulent</span>
+                    <span class="p-desc">Boundary Atmospheric Link</span>
+                  </button>
+                  <button class="btn-preset-card" data-preset="CIRCULAR">
+                    <span class="p-title">Circular</span>
+                    <span class="p-desc">Precision Orbit Baseline</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Action Buttons Footer with Tooltips -->
+            <div class="control-actions-footer">
+              <button class="btn-action-primary" id="btnPlayPause" title="Pause / Resume Simulation (Space)">
+                <span class="btn-icon">⏸</span> <span>Pause [Space]</span>
+              </button>
+              <button class="btn-action-secondary" id="btnReset" title="Reset Simulation (R)">
+                <span class="btn-icon">↺</span> <span>Reset [R]</span>
+              </button>
+              <button class="btn-action-glow" id="btnCenterTarget" title="Center Boresight (C)">
+                <span class="btn-icon">🎯</span> <span>Center [C]</span>
+              </button>
+            </div>
+          </section>
+
+          <!-- Card 5: Disturbance Controls -->
+          <section class="card-panel panel-disturbances">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+                </span>
+                <h2 class="card-title">Disturbances</h2>
+              </div>
+            </div>
+
+            <div class="disturbances-body">
+              <!-- Item 1: Atmospheric Turbulence -->
+              <div class="disturb-item">
+                <div class="disturb-info">
+                  <span class="disturb-name">Turbulence</span>
+                </div>
+                <label class="switch-toggle" title="Toggle Turbulence">
+                  <input type="checkbox" id="toggleTurbulence" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <input type="range" id="sliderTurbulence" min="0" max="1" step="0.05" value="0.5" class="custom-slider slider-sm">
+                <span class="disturb-level-tag" id="tagTurbulence">Med</span>
+              </div>
+
+              <!-- Item 2: Platform Vibration -->
+              <div class="disturb-item">
+                <div class="disturb-info">
+                  <span class="disturb-name">Platform Jitter</span>
+                </div>
+                <label class="switch-toggle" title="Toggle Vibration">
+                  <input type="checkbox" id="toggleJitter" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <input type="range" id="sliderJitter" min="0" max="0.05" step="0.005" value="0.015" class="custom-slider slider-sm">
+                <span class="disturb-level-tag" id="tagJitter">Low</span>
+              </div>
+
+              <!-- Item 3: Sensor Noise -->
+              <div class="disturb-item">
+                <div class="disturb-info">
+                  <span class="disturb-name">Sensor Noise</span>
+                </div>
+                <label class="switch-toggle" title="Toggle Noise">
+                  <input type="checkbox" id="toggleNoise" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <input type="range" id="sliderNoise" min="0" max="25" step="1" value="6" class="custom-slider slider-sm">
+                <span class="disturb-level-tag" id="tagNoise">6σ</span>
+              </div>
+
+              <!-- Item 4: Target Jitter -->
+              <div class="disturb-item">
+                <div class="disturb-info">
+                  <span class="disturb-name">Target Dynamics</span>
+                </div>
+                <label class="switch-toggle" title="Toggle Target Jitter">
+                  <input type="checkbox" id="toggleTargetJitter" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <input type="range" id="sliderTargetJitter" min="0" max="1" step="0.1" value="0.2" class="custom-slider slider-sm">
+                <span class="disturb-level-tag" id="tagTargetJitter">Low</span>
+              </div>
+
+              <!-- Item 5: Cloud Obstruction -->
+              <div class="disturb-item">
+                <div class="disturb-info">
+                  <span class="disturb-name">Cloud Occlusion</span>
+                </div>
+                <label class="switch-toggle" title="Continuous Cloud">
+                  <input type="checkbox" id="toggleCloud">
+                  <span class="toggle-slider"></span>
+                </label>
+                <button class="btn-pulse-occlusion" id="btnTriggerCloud">Pulse</button>
+                <span class="disturb-level-tag" id="tagCloud">None</span>
+              </div>
+
+              <!-- Item 6: Background Noise -->
+              <div class="disturb-item">
+                <div class="disturb-info">
+                  <span class="disturb-name">Background</span>
+                </div>
+                <label class="switch-toggle" title="Background Noise">
+                  <input type="checkbox" id="toggleBgNoise" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <input type="range" id="sliderBgNoise" min="0" max="10" step="1" value="4" class="custom-slider slider-sm">
+                <span class="disturb-level-tag" id="tagBgNoise">4σ</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 6: Performance Metrics & Sparkline -->
+          <section class="card-panel panel-performance">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>
+                </span>
+                <h2 class="card-title">Performance Metrics</h2>
+              </div>
+            </div>
+
+            <div class="performance-body">
+              <div class="perf-metric-row">
+                <span class="perf-name">Acquisition Time</span>
+                <span class="perf-val" id="perfAcqTime">0.17 s</span>
+              </div>
+
+              <div class="perf-metric-row">
+                <span class="perf-name">Avg. Tracking Error</span>
+                <span class="perf-val" id="perfAvgErr">0.21 px</span>
+              </div>
+
+              <div class="perf-metric-row">
+                <span class="perf-name">Max. Tracking Error</span>
+                <span class="perf-val" id="perfMaxErr">0.85 px</span>
+              </div>
+
+              <div class="perf-metric-row">
+                <span class="perf-name">Lock Retention</span>
+                <span class="perf-val" id="perfLockRate">99.4%</span>
+              </div>
+
+              <div class="perf-metric-row">
+                <span class="perf-name">Loop Latency</span>
+                <span class="perf-val" id="perfProcTime">1.2 ms</span>
+              </div>
+
+              <div class="perf-metric-row">
+                <span class="perf-name">Throughput</span>
+                <span class="perf-val" id="telemFps">59.8 FPS</span>
+              </div>
+
+              <!-- Sparkline: Tracking Error over last 30s -->
+              <div class="telem-sparkline-row">
+                <div class="sparkline-header">
+                  <span>Error Sparkline (30s)</span>
+                  <span id="sparklineVal">0.21 px</span>
+                </div>
+                <canvas id="telemSparklineCanvas" width="180" height="24"></canvas>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- ================= ROW 3: ENVIRONMENT & TARGET + ANALYTICS GRAPH + LOGS ================= -->
+        <div class="grid-row row-bot">
+
+          <!-- Card 7: Environment & Target Settings -->
+          <section class="card-panel panel-env-target">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                </span>
+                <h2 class="card-title">Environment & Target</h2>
+              </div>
+            </div>
+
+            <div class="env-target-body">
+              <!-- Left Form Controls -->
+              <div class="env-form-col">
+                <div class="form-group-item">
+                  <label class="form-lbl">Environment Preset</label>
+                  <select id="selEnvironmentPreset" class="custom-select">
+                    <option value="DEEP_SPACE" selected>Deep Space (35,786 km)</option>
+                    <option value="HIGH_ALTITUDE">High Altitude Orbit (550 km)</option>
+                    <option value="TURBULENT">Turbulent Atmosphere (12 km)</option>
+                    <option value="GROUND_STATION">Ground Station (500 km)</option>
+                  </select>
+                </div>
+
+                <div class="form-group-item">
+                  <label class="form-lbl">Target Trajectory</label>
+                  <select id="selTrajectory" class="custom-select">
+                    <option value="CIRCULAR" selected>Circular</option>
+                    <option value="LEO_PASS">LEO Pass</option>
+                    <option value="FIGURE_EIGHT">Figure-8</option>
+                    <option value="RANDOM_WALK">Random Walk</option>
+                  </select>
+                </div>
+
+                <div class="form-group-item">
+                  <label class="form-lbl">Target Speed</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="inputTargetSpeed" value="2.4" step="0.1" class="custom-input-num">
+                    <span class="unit-tag">km/s</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Center Target Properties -->
+              <div class="target-props-col">
+                <div class="props-title">Target Properties</div>
+                
+                <div class="prop-row">
+                  <span class="prop-k">Type</span>
+                  <span class="prop-v" id="lblTargetType">Optical Beacon</span>
+                </div>
+
+                <div class="prop-row">
+                  <span class="prop-k">Size</span>
+                  <input type="range" id="sliderTargetSize" min="2" max="15" step="1" value="5" class="custom-slider slider-sm">
+                  <span class="prop-v" id="lblTargetSizeVal">5 px</span>
+                </div>
+
+                <div class="prop-row">
+                  <span class="prop-k">Wavelength</span>
+                  <div class="color-picker-group">
+                    <span class="color-swatch-dot active" data-color="#E8A33D" style="background:#E8A33D;" title="Signal Amber (1550nm)"></span>
+                    <span class="color-swatch-dot" data-color="#74B97A" style="background:#74B97A;" title="Green Laser (532nm)"></span>
+                    <span class="color-swatch-dot" data-color="#86A9C9" style="background:#86A9C9;" title="Muted Blue (850nm)"></span>
+                    <span class="color-swatch-dot" data-color="#E0604E" style="background:#E0604E;" title="Red Beacon (650nm)"></span>
+                    <span class="color-name" id="lblColorName">Amber</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Target Thumbnail Preview -->
+              <div class="target-preview-box">
+                <canvas id="targetPreviewCanvas" width="80" height="80"></canvas>
+                <div class="change-target-nav">
+                  <button class="btn-arr" id="btnPrevTarget" title="Previous Target">‹</button>
+                  <span class="chg-lbl">Model</span>
+                  <button class="btn-arr" id="btnNextTarget" title="Next Target">›</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 8: Tracking Analytics Chart -->
+          <section class="card-panel panel-analytics">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+                </span>
+                <h2 class="card-title">Tracking Analytics</h2>
+              </div>
+              <div class="analytics-tabs">
+                <button class="btn-chart-tab active" data-chart="error">Error</button>
+                <button class="btn-chart-tab" data-chart="fps">FPS / Latency</button>
+                <button class="btn-chart-tab" data-chart="pantilt">Pan / Tilt</button>
+                <button class="btn-chart-tab" data-chart="confidence">Confidence</button>
+              </div>
+            </div>
+
+            <div class="analytics-body">
+              <div class="chart-legend-header">
+                <div class="chart-legend-items">
+                  <div class="c-leg"><span class="c-dot c-green"></span> Error (px)</div>
+                  <div class="c-leg"><span class="c-dot c-cyan"></span> Pan (mrad)</div>
+                  <div class="c-leg"><span class="c-dot c-purple"></span> Tilt (mrad)</div>
+                </div>
+                <div class="chart-summary-stats">
+                  <div class="c-stat">
+                    <span class="cs-k">Avg Error</span>
+                    <span class="cs-v" id="chartAvgError">0.21 px</span>
+                  </div>
+                  <div class="c-stat">
+                    <span class="cs-k">Max Error</span>
+                    <span class="cs-v" id="chartMaxError">0.85 px</span>
+                  </div>
+                  <div class="c-stat">
+                    <span class="cs-k">Lock Rate</span>
+                    <span class="cs-v" id="chartLockRate">99.4%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chart-canvas-wrapper">
+                <canvas id="analyticsChartCanvas" width="560" height="110"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 9: System Logs -->
+          <section class="card-panel panel-system-logs">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                </span>
+                <h2 class="card-title">System Event Ledger</h2>
+              </div>
+              <button class="link-view-all" id="btnViewAllLogs">View All</button>
+            </div>
+
+            <div class="logs-feed-container" id="logsFeedList">
+              <div class="log-entry">
+                <span class="log-time">16:42:10</span>
+                <span class="log-dot dot-green"></span>
+                <span class="log-msg">Target state [MEASURED] · (320.4, 240.2) px</span>
+              </div>
+              <div class="log-entry">
+                <span class="log-time">16:42:08</span>
+                <span class="log-dot dot-green"></span>
+                <span class="log-msg">Closed-loop optical tracking active</span>
+              </div>
+              <div class="log-entry">
+                <span class="log-time">16:41:52</span>
+                <span class="log-dot dot-cyan"></span>
+                <span class="log-msg">Gimbal slew commanded (pan: 12.4°, tilt: -3.2°)</span>
+              </div>
+              <div class="log-entry">
+                <span class="log-time">16:41:47</span>
+                <span class="log-dot dot-orange"></span>
+                <span class="log-msg">Atmospheric turbulence disturbance applied</span>
+              </div>
+              <div class="log-entry">
+                <span class="log-time">16:41:28</span>
+                <span class="log-dot dot-green"></span>
+                <span class="log-msg">Beacon acquired on focal plane</span>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- Full Logs / Audit Modal -->
+  <div class="modal-backdrop" id="logsModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">System Event & Telemetry Ledger</h3>
+        <button class="btn-modal-close" id="btnCloseLogsModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-logs-list" id="modalFullLogsList"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action-primary" id="btnExportLogsCsv">Export CSV Ledger</button>
+        <button class="btn-action-secondary" id="btnClearLogs">Clear Log View</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings & Benchmark Modal -->
+  <div class="modal-backdrop" id="settingsModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Mission Settings & Tracker Comparison</h3>
+        <button class="btn-modal-close" id="btnCloseSettingsModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-group">
+          <label class="form-lbl">Active Tracking Engine</label>
+          <select id="selModalTracker" class="custom-select" style="width:100%; margin-top:4px;">
+            <option value="DRISHTI_PAT" selected>DRISHTI-PAT (5-Lane Adaptive Evidence)</option>
+            <option value="BASELINE_B1">Baseline B1 (+ Kalman Filter)</option>
+            <option value="BASELINE_B0">Baseline B0 (Detector + PID)</option>
+          </select>
+        </div>
+        <div class="settings-group" style="margin-top:12px;">
+          <label class="form-lbl">ISRO Benchmark Suite</label>
+          <p style="font-size:12px; color:var(--text-2); margin:4px 0 8px 0;">Execute a 3-way paired comparison run on identical seeded frames against official ISRO targets.</p>
+          <button class="btn-action-primary" id="btnRunModalBenchmark" style="width:100%;">Run ISRO Paired Benchmark</button>
+        </div>
+        <div id="benchmarkResultsBox" style="margin-top:12px; display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden elements for backward compatibility of telemetry bindings -->
+  <div style="display:none;">
+    <span id="telemPan">12.4°</span>
+    <span id="telemTilt">-3.2°</span>
+    <span id="telemError">0.21 px</span>
+    <span id="telemConfidence">92%</span>
+    <span id="telemLatency">1.2 ms</span>
+    <span id="telemLockPill">● LOCKED</span>
+    <span id="perfDuration">120 s</span>
+    <canvas id="radarCompassCanvas" width="160" height="160"></canvas>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/js/charts.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

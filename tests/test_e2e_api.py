@@ -10,8 +10,24 @@ import urllib.request
 import pytest
 import websockets
 
-BASE_URL = "http://127.0.0.1:8085"
-WS_URL = "ws://127.0.0.1:8085/ws/telemetry"
+import socket
+
+def get_active_port():
+    for port in (8000, 8085):
+        try:
+            s = socket.socket()
+            s.settimeout(0.5)
+            s.connect(('127.0.0.1', port))
+            s.close()
+            return port
+        except Exception:
+            continue
+    return 8000
+
+ACTIVE_PORT = get_active_port()
+BASE_URL = f"http://127.0.0.1:{ACTIVE_PORT}"
+WS_URL = f"ws://127.0.0.1:{ACTIVE_PORT}/ws/telemetry"
+
 
 
 def test_http_endpoints():
