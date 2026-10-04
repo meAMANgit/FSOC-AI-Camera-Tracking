@@ -5,7 +5,7 @@
  * Keyboard shortcuts (Space, R, C, T), Dark/Light theme tokens, and Three.js 3D orbit.
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+function initApplication() {
   // Global Application State
   const state = {
     ws: null,
@@ -2388,4 +2388,11 @@ document.addEventListener('DOMContentLoaded', () => {
       modalList.appendChild(row);
     });
   }
-});
+}
+
+// Guarantee execution whether script runs before or after DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApplication);
+} else {
+  initApplication();
+}
