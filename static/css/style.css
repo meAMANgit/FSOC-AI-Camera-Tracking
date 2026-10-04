@@ -543,50 +543,46 @@ body {
   cursor: crosshair;
 }
 
-/* High-contrast optical sensor canvas */
+/* Greyscale video rendering overlay */
 .greyscale-feed {
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
+  filter: grayscale(100%) contrast(1.05);
 }
 
-/* Camera Overlay Corner Readouts (High-contrast cyan/green HUD styling) */
+/* Camera Overlay Corner Readouts (12px Mono) */
 .cam-overlay-tag {
   position: absolute;
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--ok);
-  background-color: rgba(10, 14, 20, 0.88);
-  border: 1px solid rgba(116, 185, 122, 0.45);
-  border-radius: 4px;
-  padding: 3px 8px;
+  color: var(--text-2);
+  background-color: rgba(17, 19, 21, 0.75);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  padding: 2px 6px;
   pointer-events: none;
   z-index: 10;
   line-height: 1.2;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
-.cam-tag-top-left { top: 10px; left: 10px; color: #74B97A; border-color: rgba(116, 185, 122, 0.6); }
-.cam-tag-top-right { top: 10px; right: 10px; color: #86A9C9; border-color: rgba(134, 169, 201, 0.6); }
-.cam-tag-bot-left { bottom: 48px; left: 10px; color: #86A9C9; border-color: rgba(134, 169, 201, 0.6); }
-.cam-tag-bot-right { bottom: 48px; right: 10px; color: #86A9C9; border-color: rgba(134, 169, 201, 0.6); }
+.cam-tag-top-left { top: 8px; left: 8px; }
+.cam-tag-top-right { top: 8px; right: 8px; }
+.cam-tag-bot-left { bottom: 44px; left: 8px; }
+.cam-tag-bot-right { bottom: 44px; right: 8px; }
 
 /* Scale bar & optical spec chip */
 .cam-scale-bar-tag {
   position: absolute;
-  bottom: 48px;
-  left: 10px;
+  bottom: 44px;
+  left: 8px;
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #86A9C9;
-  background: rgba(10, 14, 20, 0.88);
-  border: 1px solid rgba(134, 169, 201, 0.6);
-  padding: 3px 8px;
-  border-radius: 4px;
+  color: var(--text-3);
+  background: rgba(17, 19, 21, 0.8);
+  border: 1px solid var(--rule);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
   pointer-events: none;
   z-index: 10;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 /* Camera Feed SIM / Video Badge */

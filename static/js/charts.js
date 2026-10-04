@@ -1,7 +1,7 @@
 /**
- * SIH26169 DRISHTI-PAT Mission Control Analytics & Telemetry Chart Engine
+ * SIH26169 DRISHTI-PAT Mission Control Analytics Chart Engine
  * Scientific Observatory Instrument: Crisp 1.5px multi-series charts without glow.
- * Theme-aware colors matching CSS design tokens, pre-seeded for instantaneous live rendering.
+ * Theme-aware colors matching CSS design tokens.
  */
 
 class TelemetryChartEngine {
@@ -16,28 +16,7 @@ class TelemetryChartEngine {
     this.sparklineCanvas = document.getElementById('telemSparklineCanvas');
     this.sparklineCtx = this.sparklineCanvas ? this.sparklineCanvas.getContext('2d') : null;
 
-    // Pre-seed with 40 initial high-precision telemetry observations
-    const nowSec = Date.now() / 1000;
-    for (let i = 0; i < 40; i++) {
-      const t = nowSec - (40 - i) * 0.033;
-      const baseErr = 0.21 + Math.sin(i * 0.25) * 0.08 + (Math.random() * 0.05);
-      this.history.push({
-        time: t,
-        trackingError: Math.max(0.05, baseErr),
-        pan: Math.sin(i * 0.15) * 25.0,
-        tilt: Math.cos(i * 0.12) * 18.0,
-        fps: 30.0 + (Math.random() * 0.6 - 0.3),
-        latency: 0.31 + (Math.random() * 0.04),
-        confidence: 94 + Math.round(Math.random() * 4),
-        r95: 1.15 + (Math.random() * 0.12),
-        isLocked: true
-      });
-    }
-
     this.initResizeListener();
-    this.updateSummaryStats();
-    this.render();
-    this.renderSparkline();
   }
 
   getCanvas() {
@@ -97,19 +76,19 @@ class TelemetryChartEngine {
 
   addDataPoint(data) {
     const errPx = typeof data.tracking_error_px === 'number' ? Math.abs(data.tracking_error_px) : 0.21;
-    const panMrad = typeof data.gimbal_pan_deg === 'number' ? data.gimbal_pan_deg * 17.4533 : 0.0;
-    const tiltMrad = typeof data.gimbal_tilt_deg === 'number' ? data.gimbal_tilt_deg * 17.4533 : 0.0;
+    const panMrad = typeof data.gimbal_pan_deg === 'number' ? data.gimbal_pan_deg * 17.4533 : 216.4;
+    const tiltMrad = typeof data.gimbal_tilt_deg === 'number' ? data.gimbal_tilt_deg * 17.4533 : -55.8;
 
     this.history.push({
       time: data.timestamp || Date.now() / 1000,
       trackingError: errPx,
       pan: panMrad,
       tilt: tiltMrad,
-      fps: data.fps || 30.0,
-      latency: data.action_cost_ms || 0.31,
-      confidence: data.confidence || 95,
-      r95: data.uncertainty_r95 || 1.15,
-      isLocked: data.is_ready || (data.frame_state === 'MEASURED') || (data.track_state === 'TRACK')
+      fps: data.fps || 59.8,
+      latency: data.action_cost_ms || 1.2,
+      confidence: data.confidence || 92,
+      r95: data.uncertainty_r95 || 1.2,
+      isLocked: data.is_ready || (data.frame_state === 'MEASURED')
     });
 
     if (this.history.length > this.maxPoints) {
@@ -125,10 +104,9 @@ class TelemetryChartEngine {
     if (this.history.length === 0) return;
     const errors = this.history.map(d => d.trackingError);
     const avgErr = errors.reduce((a, b) => a + b, 0) / errors.length;
-    const maxErr = Math.max(0.4, ...errors);
+    const maxErr = Math.max(...errors);
     const lockedCount = this.history.filter(d => d.isLocked).length;
     const lockRate = (lockedCount / this.history.length) * 100;
-    const lastPt = this.history[this.history.length - 1];
 
     const elAvg = document.getElementById('chartAvgError');
     const elMax = document.getElementById('chartMaxError');
@@ -136,9 +114,6 @@ class TelemetryChartEngine {
     const perfAvg = document.getElementById('perfAvgErr');
     const perfMax = document.getElementById('perfMaxErr');
     const perfLock = document.getElementById('perfLockRate');
-    const perfAcq = document.getElementById('perfAcqTime');
-    const perfProc = document.getElementById('perfProcTime');
-    const perfFps = document.getElementById('telemFps');
     const sparkVal = document.getElementById('sparklineVal');
 
     const lastErr = errors[errors.length - 1];
@@ -149,9 +124,6 @@ class TelemetryChartEngine {
     if (perfAvg) perfAvg.textContent = `${avgErr.toFixed(2)} px`;
     if (perfMax) perfMax.textContent = `${maxErr.toFixed(2)} px`;
     if (perfLock) perfLock.textContent = `${lockRate.toFixed(1)}%`;
-    if (perfAcq) perfAcq.textContent = '0.17 s';
-    if (perfProc) perfProc.textContent = `${(lastPt.latency || 0.31).toFixed(1)} ms`;
-    if (perfFps) perfFps.textContent = `${(lastPt.fps || 30.0).toFixed(1)} FPS`;
     if (sparkVal) sparkVal.textContent = `${lastErr.toFixed(2)} px`;
   }
 
@@ -169,11 +141,10 @@ class TelemetryChartEngine {
     ctx.clearRect(0, 0, width, height);
 
     const errors = this.history.map(d => d.trackingError);
-    const maxErr = Math.max(1.5, ...errors);
+    const maxErr = Math.max(2.0, ...errors);
 
-    // Sparkline line
     ctx.strokeStyle = colors.accent;
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
 
     const stepX = width / (this.history.length - 1);
@@ -185,13 +156,6 @@ class TelemetryChartEngine {
     });
 
     ctx.stroke();
-
-    // Sparkline subtle fill
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fillStyle = colors.accent.replace(')', ', 0.12)').replace('rgb', 'rgba').replace('#E8A33D', 'rgba(232, 163, 61, 0.15)');
-    ctx.fill();
   }
 
   render() {
@@ -228,22 +192,22 @@ class TelemetryChartEngine {
     let series = [];
     if (this.currentMode === 'error') {
       series = [
-        { key: 'trackingError', color: colors.accent, maxVal: 3.0, label: 'Error (px)' },
-        { key: 'r95', color: colors.predict, maxVal: 3.0, label: 'r₉₅ (px)' }
+        { key: 'trackingError', color: colors.accent, maxVal: 5.0, label: 'Error' },
+        { key: 'r95', color: colors.predict, maxVal: 5.0, label: 'r₉₅' }
       ];
     } else if (this.currentMode === 'fps') {
       series = [
-        { key: 'fps', color: colors.ok, maxVal: 45.0, label: 'FPS' },
-        { key: 'latency', color: colors.predict, maxVal: 5.0, label: 'Latency (ms)' }
+        { key: 'fps', color: colors.ok, maxVal: 60.0, label: 'FPS' },
+        { key: 'latency', color: colors.predict, maxVal: 20.0, label: 'ms' }
       ];
     } else if (this.currentMode === 'pantilt') {
       series = [
-        { key: 'pan', color: colors.accent, maxVal: 60.0, label: 'Pan (mrad)' },
-        { key: 'tilt', color: colors.predict, maxVal: 60.0, label: 'Tilt (mrad)' }
+        { key: 'pan', color: colors.accent, maxVal: 500.0, label: 'Pan' },
+        { key: 'tilt', color: colors.predict, maxVal: 500.0, label: 'Tilt' }
       ];
     } else if (this.currentMode === 'confidence') {
       series = [
-        { key: 'confidence', color: colors.ok, maxVal: 100.0, label: 'Confidence (%)' }
+        { key: 'confidence', color: colors.ok, maxVal: 100.0, label: 'Conf' }
       ];
     }
 
@@ -261,10 +225,7 @@ class TelemetryChartEngine {
       this.history.forEach((pt, idx) => {
         const x = padX + idx * stepX;
         let val = pt[s.key] || 0;
-        let norm = Math.min(1.0, Math.max(0.0, val / s.maxVal));
-        if (s.key === 'tilt' || s.key === 'pan') {
-          norm = Math.min(1.0, Math.max(0.0, (val + s.maxVal) / (s.maxVal * 2)));
-        }
+        let norm = Math.min(1.0, Math.max(0.0, (val + (s.key === 'tilt' || s.key === 'pan' ? s.maxVal : 0)) / (s.maxVal * (s.key === 'tilt' || s.key === 'pan' ? 2 : 1))));
         const y = height - 10 - norm * (height - 20);
 
         if (idx === 0) ctx.moveTo(x, y);

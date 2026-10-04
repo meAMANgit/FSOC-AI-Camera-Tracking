@@ -50,24 +50,13 @@ app.add_middleware(
 
 # Mount static directory
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
-UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(os.path.join(STATIC_DIR, "css"), exist_ok=True)
+os.makedirs(os.path.join(STATIC_DIR, "js"), exist_ok=True)
+os.makedirs(os.path.join(os.path.dirname(__file__), "reports"), exist_ok=True)
+os.makedirs(os.path.join(os.path.dirname(__file__), "uploads"), exist_ok=True)
 
-try:
-    os.makedirs(STATIC_DIR, exist_ok=True)
-    os.makedirs(os.path.join(STATIC_DIR, "css"), exist_ok=True)
-    os.makedirs(os.path.join(STATIC_DIR, "js"), exist_ok=True)
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-except OSError:
-    REPORTS_DIR = "/tmp/reports"
-    UPLOADS_DIR = "/tmp/uploads"
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-
-if os.path.exists(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 # Global Simulation & Tracking State Manager
