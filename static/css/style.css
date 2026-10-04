@@ -1,0 +1,2104 @@
+/* ==========================================================================
+   SIH26169 – AI-Based Virtual Camera Tracking System for FSOC Terminals
+   Design System: "Observatory Instrument" (Scientific Mission-Control)
+   Calm, precise, data-first. Exactly one accent color (Signal Amber).
+   Zero neon glows, zero glassmorphism, zero gradients, zero AI marketing fluff.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Design Tokens (Dark Theme Default & Light Theme Override)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Dark Theme Palette (Default) */
+  --bg: #111315;             /* Graphite, not navy */
+  --surface: #171A1D;
+  --surface-raised: #1E2226;
+  --surface-active: #262B30;
+  --rule: #2A2F34;           /* 1px hairlines */
+  --rule-subtle: #22262A;
+  
+  --text: #E9E5DB;           /* Warm off-white */
+  --text-2: #A29D92;         /* Secondary labels */
+  --text-3: #6E6A62;         /* Subtle units, ticks, section headers */
+  
+  --accent: #E8A33D;         /* Signal Amber – THE ONLY ACCENT */
+  --accent-hover: #D49231;
+  --accent-active: #BF8226;
+  --accent-dim: rgba(232, 163, 61, 0.15);
+  --accent-contrast: #111315;/* Text on accent buttons */
+
+  --ok: #74B97A;             /* Locked / Measured state */
+  --ok-dim: rgba(116, 185, 122, 0.15);
+  --warn: #E8A33D;           /* Ambiguous / Caution */
+  --warn-dim: rgba(232, 163, 61, 0.15);
+  --fault: #E0604E;          /* Lost / Fault */
+  --fault-dim: rgba(224, 96, 78, 0.15);
+  --predict: #86A9C9;        /* Predicted / Coasting – muted blue */
+  --predict-dim: rgba(134, 169, 201, 0.15);
+  --beacon: #F4ECD2;         /* Optical beacon spot */
+
+  /* Typography */
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Sizing & Borders */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-xs: 2px;
+  --header-height: 48px;
+  --rail-width: 64px;
+  --rail-expanded-width: 200px;
+  
+  /* Transitions */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+}
+
+[data-theme="light"] {
+  --bg: #F3F0E8;
+  --surface: #FBFAF6;
+  --surface-raised: #FFFFFF;
+  --surface-active: #EDE8DE;
+  --rule: #DDD7CB;
+  --rule-subtle: #E8E3D8;
+  
+  --text: #1C1E21;
+  --text-2: #5B5750;
+  --text-3: #8C877D;
+  
+  --accent: #B8570F;
+  --accent-hover: #9E4A0C;
+  --accent-active: #843C08;
+  --accent-dim: rgba(184, 87, 15, 0.12);
+  --accent-contrast: #FFFFFF;
+
+  --ok: #2F7D3A;
+  --ok-dim: rgba(47, 125, 58, 0.12);
+  --warn: #B8570F;
+  --warn-dim: rgba(184, 87, 15, 0.12);
+  --fault: #B3362B;
+  --fault-dim: rgba(179, 54, 43, 0.12);
+  --predict: #3D6A93;
+  --predict-dim: rgba(61, 106, 147, 0.12);
+  --beacon: #2A2F34;
+}
+
+/* --------------------------------------------------------------------------
+   2. Base Reset & Typography
+   -------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Tabular Mono Numbers */
+.mono, .clock-time, .clock-date, .telem-val, .perf-val, .cs-v,
+.slider-num-val, .time-readout, .log-time, .cam-overlay-tag,
+.feed-val, .prop-v, .hud-v {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small Uppercase Section Labels */
+.section-label, .card-title, .ctrl-subhead, .props-title, .form-lbl,
+.mode-lbl, .hud-card-title, .feed-lbl, .cs-k {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+/* --------------------------------------------------------------------------
+   3. Main Application Layout
+   -------------------------------------------------------------------------- */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   4. Top Bar (Thin 48px Header)
+   -------------------------------------------------------------------------- */
+.top-header {
+  height: var(--header-height);
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.brand-logo-glow {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.orbit-icon {
+  width: 24px;
+  height: 24px;
+  stroke: var(--accent);
+}
+
+.brand-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.brand-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.brand-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.brand-subtitle {
+  display: none; /* Removed marketing subtitle */
+}
+
+/* Center Stepper / Breadcrumbs */
+.header-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.bc-step {
+  color: var(--text-3);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.bc-step:hover {
+  color: var(--text);
+}
+
+.bc-step.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.bc-dot {
+  color: var(--rule);
+  font-size: 9px;
+}
+
+/* Top Bar Right Controls */
+.header-right-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Status Chip */
+.sys-badge-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ok);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--ok-dim);
+  border: 1px solid var(--rule);
+}
+
+.pulse-indicator, .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--ok);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.clock-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 0 4px;
+}
+
+.clock-date {
+  color: var(--text-3);
+}
+
+.clock-time {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Header Buttons */
+.icon-btn-header {
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.icon-btn-header:hover {
+  background: var(--surface-active);
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
+.icon-btn-settings {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.icon-btn-settings:hover {
+  background: var(--surface-active);
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------------------
+   5. Workspace Body & Left Rail Navigation
+   -------------------------------------------------------------------------- */
+.workspace-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100vh - var(--header-height));
+}
+
+/* Left Icon Rail */
+.sidebar-nav {
+  width: var(--rail-width);
+  background-color: var(--surface);
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: width var(--duration-normal) var(--ease-standard);
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: 90;
+  flex-shrink: 0;
+}
+
+.sidebar-nav:hover {
+  width: var(--rail-expanded-width);
+}
+
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  gap: 2px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 22px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard);
+}
+
+.nav-item:hover {
+  color: var(--text);
+  background-color: var(--surface-raised);
+}
+
+.nav-item.active {
+  color: var(--text);
+  background-color: var(--surface-raised);
+  border-left-color: var(--accent); /* 2px signal amber indicator bar */
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 18px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.nav-icon svg {
+  stroke-width: 1.5px;
+}
+
+.nav-label {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.sidebar-nav:hover .nav-label {
+  opacity: 1;
+}
+
+.sidebar-footer-art {
+  display: none; /* Removed decorative gradients */
+}
+
+/* --------------------------------------------------------------------------
+   6. Main Content Grid (Observatory Panels)
+   -------------------------------------------------------------------------- */
+.main-grid {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--bg);
+}
+
+.grid-row {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Row 1: Asymmetric 12-Column Grid (Camera Hero = 7 cols, 3D Orbit = 5 cols) */
+.row-top {
+  grid-template-columns: 7fr 5fr;
+  min-height: 480px;
+}
+
+/* Row 2: Mission Status (3) + Control Deck (4) + Disturbances (3) + Performance (2) */
+.row-mid {
+  grid-template-columns: 3.2fr 3.8fr 3fr 2fr;
+}
+
+/* Row 3: Environment & Target (4) + Analytics Chart (5) + System Logs (3) */
+.row-bot {
+  grid-template-columns: 3.8fr 5.2fr 3fr;
+}
+
+/* --------------------------------------------------------------------------
+   7. Observatory Card Panels (Flat, 1px Hairlines, 6px Max Radius, No Shadow)
+   -------------------------------------------------------------------------- */
+.card-panel {
+  background-color: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-header {
+  height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--surface);
+  flex-shrink: 0;
+}
+
+.header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-3);
+}
+
+.panel-icon svg {
+  stroke-width: 1.5px;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   8. Virtual Camera Feed (Hero Component)
+   -------------------------------------------------------------------------- */
+.panel-camera-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-viewport-container {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  background-color: #0A0C0E;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+#cameraFeedCanvas {
+  width: 100%;
+  height: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  display: block;
+  background-color: #0A0C0E;
+  cursor: crosshair;
+}
+
+/* Greyscale video rendering overlay */
+.greyscale-feed {
+  filter: grayscale(100%) contrast(1.05);
+}
+
+/* Camera Overlay Corner Readouts (12px Mono) */
+.cam-overlay-tag {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  background-color: rgba(17, 19, 21, 0.75);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  padding: 2px 6px;
+  pointer-events: none;
+  z-index: 10;
+  line-height: 1.2;
+}
+
+.cam-tag-top-left { top: 8px; left: 8px; }
+.cam-tag-top-right { top: 8px; right: 8px; }
+.cam-tag-bot-left { bottom: 44px; left: 8px; }
+.cam-tag-bot-right { bottom: 44px; right: 8px; }
+
+/* Scale bar & optical spec chip */
+.cam-scale-bar-tag {
+  position: absolute;
+  bottom: 44px;
+  left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  background: rgba(17, 19, 21, 0.8);
+  border: 1px solid var(--rule);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Camera Feed SIM / Video Badge */
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--rule);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--text-3);
+}
+
+/* Camera Feed Sub-Bar Toolbar */
+.camera-card-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background-color: var(--surface);
+  border-top: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  z-index: 20;
+}
+
+.feed-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ok);
+}
+
+.status-dot-green {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--ok);
+}
+
+.feed-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.feed-lbl {
+  color: var(--text-3);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.feed-val {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+
+.feed-confidence-bar {
+  width: 80px;
+  height: 4px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.conf-fill {
+  height: 100%;
+  background-color: var(--accent);
+  transition: width var(--duration-fast) var(--ease-standard);
+}
+
+.btn-lock-state {
+  height: 26px;
+  padding: 0 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.btn-lock-state:hover {
+  background: var(--surface-active);
+  border-color: var(--text-3);
+}
+
+/* Evidence Strip (300-Frame Track State Timeline) */
+.evidence-strip-container {
+  height: 20px;
+  background-color: var(--surface);
+  border-top: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+}
+
+.evidence-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+#evidenceCanvas {
+  flex: 1;
+  height: 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   9. 3D Space Environment (Secondary Component)
+   -------------------------------------------------------------------------- */
+.panel-3d-space {
+  display: flex;
+  flex-direction: column;
+}
+
+.space-viewport-container {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  background-color: #0A0C0E;
+  overflow: hidden;
+}
+
+#space3DCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+#space3DCanvas:active {
+  cursor: grabbing;
+}
+
+/* View Mode Segmented Controls */
+.view-mode-toggles {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.btn-toggle-view {
+  height: 24px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-toggle-view:hover {
+  color: var(--text);
+}
+
+.btn-toggle-view.active {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule);
+}
+
+.btn-fullscreen-view {
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 3D Legend Key (Small Flat Key in Corner) */
+.hud-legend-card {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(23, 26, 29, 0.88);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.legend-symbol {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.symbol-diamond {
+  width: 7px;
+  height: 7px;
+  background-color: var(--accent);
+  transform: rotate(45deg);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.symbol-square {
+  width: 7px;
+  height: 7px;
+  background-color: transparent;
+  border: 1.5px solid var(--text);
+}
+
+.symbol-wedge {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid var(--accent);
+  opacity: 0.85;
+}
+
+/* Screen-Space Collision-Free Marker Tags */
+.hud-marker-tag {
+  position: absolute;
+  background: rgba(23, 26, 29, 0.88);
+  border: 1px solid var(--rule);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  z-index: 15;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+  transform: translate(8px, -50%);
+}
+
+.tag-terminal {
+  color: var(--text);
+  border-left: 2px solid var(--text);
+}
+
+.tag-target {
+  color: var(--accent);
+  border-left: 2px solid var(--accent);
+}
+
+.tag-marker-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Side View Altitude Ticks */
+.hud-side-altitude-ticks {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.alt-tick-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.alt-tick-line {
+  width: 14px;
+  height: 1px;
+  background-color: var(--rule);
+}
+
+/* Target Info Flat Key (Computed Live) */
+.hud-target-info {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(23, 26, 29, 0.88);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+  min-width: 165px;
+}
+
+.hud-card-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+
+.hud-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  gap: 12px;
+}
+
+.hud-k { color: var(--text-3); font-size: 11px; }
+.hud-v { color: var(--text); font-family: var(--font-mono); font-size: 11px; text-align: right; }
+
+.hud-nasa-credit {
+  position: absolute;
+  bottom: 8px;
+  right: 74px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text-3);
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.5;
+}
+
+.hud-gizmo-wrap {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 56px;
+  height: 56px;
+  pointer-events: none;
+}
+
+
+/* --------------------------------------------------------------------------
+   10. Telemetry & Performance Metrics (Clean 2-Column Tables)
+   -------------------------------------------------------------------------- */
+.panel-telemetry, .panel-performance {
+  display: flex;
+  flex-direction: column;
+}
+
+.telemetry-body, .performance-body {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+}
+
+.telem-row, .perf-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-subtle);
+  font-size: 12px;
+}
+
+.telem-row:last-child, .perf-metric-row:last-child {
+  border-bottom: none;
+}
+
+.telem-label-wrap, .perf-lbl-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+}
+
+.telem-ico, .perf-ico {
+  display: none; /* Removed decorative emojis */
+}
+
+.telem-name, .perf-name {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.telem-val, .perf-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+
+.telem-val.good { color: var(--ok); }
+.telem-val.warn { color: var(--warn); }
+.telem-val.fault { color: var(--fault); }
+
+.telem-pill-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ok);
+}
+
+/* Sparkline in Telemetry / Performance */
+.telem-sparkline-row {
+  padding: 8px 0 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sparkline-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+#telemSparklineCanvas {
+  width: 100%;
+  height: 28px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  display: block;
+}
+
+/* Polar Radar Compass */
+.radar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+#radarCompassCanvas {
+  width: 120px;
+  height: 120px;
+  display: block;
+}
+
+.radar-legend {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.r-leg-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.r-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.r-green { background: var(--ok); }
+.r-blue { background: var(--predict); }
+.r-purple { background: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   11. Mission Status & Readiness Mini Checklist
+   -------------------------------------------------------------------------- */
+.panel-mission-status {
+  display: flex;
+  flex-direction: column;
+}
+
+.mission-status-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+/* Stepper Track (Search -> Acquire -> Track -> Lock) */
+.stepper-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  padding: 4px 0;
+}
+
+.step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.step-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  background-color: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+.step-name {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.step-node.completed .step-circle {
+  background-color: var(--ok);
+  border-color: var(--ok);
+  color: var(--bg);
+  font-weight: bold;
+}
+.step-node.completed .step-name { color: var(--ok); }
+
+.step-node.current .step-circle {
+  border: 2px solid var(--accent);
+  background-color: transparent;
+  color: var(--accent);
+}
+.step-node.current .step-name { color: var(--accent); font-weight: 600; }
+
+.step-line {
+  flex: 1;
+  height: 1px;
+  background-color: var(--rule);
+  margin: 0 4px;
+  position: relative;
+  top: -8px;
+}
+
+.step-line.active {
+  background-color: var(--ok);
+}
+
+/* Mode & Time Readout */
+.mode-time-display {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.mode-box, .time-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mode-title-glow {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.time-readout {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Readiness Mini Checklist */
+.readiness-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.readiness-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.readiness-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+}
+
+.readiness-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--ok-dim);
+  color: var(--ok);
+  border: 1px solid var(--rule);
+}
+
+.readiness-badge.not-ready {
+  background: var(--fault-dim);
+  color: var(--fault);
+}
+
+.readiness-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.readiness-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--rule);
+  flex-shrink: 0;
+}
+
+.readiness-dot.active {
+  background-color: var(--ok);
+}
+
+/* --------------------------------------------------------------------------
+   12. Control Panel & D-Pad Joystick
+   -------------------------------------------------------------------------- */
+.panel-control-deck {
+  display: flex;
+  flex-direction: column;
+}
+
+.ctrl-subtabs {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.subtab-btn {
+  height: 22px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.subtab-btn:hover { color: var(--text); }
+.subtab-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule);
+}
+
+.control-deck-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.tab-pane-content {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.ctrl-sliders-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctrl-subhead {
+  margin-bottom: 2px;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 50px;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-lbl {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* Thin Sliders with Tick Marks */
+.custom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--rule);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.custom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--surface);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.custom-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.slider-num-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  text-align: right;
+}
+
+.init-pos-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule-subtle);
+}
+
+.coord-inputs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.input-coord {
+  width: 38px;
+  height: 22px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* D-Pad Joystick */
+.dpad-joystick-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 6px;
+}
+
+.dpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 28px);
+  gap: 2px;
+}
+
+.dpad-btn {
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-2);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.dpad-btn:hover {
+  background: var(--surface-active);
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
+.dpad-btn:active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.dpad-center {
+  background: var(--surface);
+  color: var(--text-3);
+}
+
+/* Tab 3 Disturbances */
+.tab-grid-disturb {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+
+.btn-quick-disturb {
+  height: 32px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.btn-quick-disturb:hover {
+  background: var(--surface-active);
+  border-color: var(--text-3);
+}
+
+/* Tab 4 Presets */
+.tab-grid-presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+
+.btn-preset-card {
+  padding: 6px 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-preset-card:hover {
+  background: var(--surface-active);
+  border-color: var(--accent);
+}
+
+.p-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.p-desc {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* Control Actions Footer Buttons */
+.control-actions-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+/* Flat Scientific Buttons (32-36px tall, 6px radius) */
+.btn-action-primary {
+  height: 32px;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-action-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-action-secondary {
+  height: 32px;
+  background-color: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-action-secondary:hover {
+  background-color: var(--surface-active);
+  border-color: var(--text-3);
+}
+
+.btn-action-glow {
+  height: 32px;
+  background-color: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-action-glow:hover {
+  background-color: var(--accent-dim);
+}
+
+.btn-icon {
+  font-size: 11px;
+}
+
+/* --------------------------------------------------------------------------
+   13. Disturbance Controls (Flat Switches & Clean Level Tags)
+   -------------------------------------------------------------------------- */
+.panel-disturbances {
+  display: flex;
+  flex-direction: column;
+}
+
+.disturbances-body {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.disturb-item {
+  display: grid;
+  grid-template-columns: 1fr 32px 60px 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule-subtle);
+}
+
+.disturb-item:last-child {
+  border-bottom: none;
+}
+
+.disturb-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.disturb-ico {
+  display: none; /* Removed emojis */
+}
+
+.disturb-name {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Flat Switch Toggle */
+.switch-toggle {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 16px;
+}
+
+.switch-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--rule);
+  border-radius: 8px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text);
+  border-radius: 50%;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.switch-toggle input:checked + .toggle-slider {
+  background-color: var(--accent);
+}
+
+.switch-toggle input:checked + .toggle-slider::before {
+  transform: translateX(12px);
+  background-color: var(--accent-contrast);
+}
+
+.slider-sm {
+  height: 3px;
+}
+
+.disturb-level-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: right;
+}
+
+.btn-pulse-occlusion {
+  height: 22px;
+  padding: 0 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   14. Environment & Target Settings
+   -------------------------------------------------------------------------- */
+.panel-env-target {
+  display: flex;
+  flex-direction: column;
+}
+
+.env-target-body {
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 90px;
+  gap: 12px;
+  align-items: start;
+}
+
+.env-form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.custom-select, .custom-input-num {
+  height: 28px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 0 8px;
+  outline: none;
+}
+
+.custom-select:focus, .custom-input-num:focus {
+  border-color: var(--accent);
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unit-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.target-props-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.prop-k { color: var(--text-3); font-size: 11px; }
+.prop-v { color: var(--text); font-family: var(--font-mono); font-size: 12px; }
+
+.color-picker-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-swatch-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.color-swatch-dot.active {
+  border-color: var(--text);
+}
+
+.color-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.target-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+#targetPreviewCanvas {
+  background: #0A0C0E;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+.change-target-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.btn-arr {
+  width: 18px;
+  height: 18px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --------------------------------------------------------------------------
+   15. Analytics Chart Panel
+   -------------------------------------------------------------------------- */
+.panel-analytics {
+  display: flex;
+  flex-direction: column;
+}
+
+.analytics-tabs {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.btn-chart-tab {
+  height: 22px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-chart-tab:hover { color: var(--text); }
+.btn-chart-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule);
+}
+
+.analytics-body {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.chart-legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-legend-items {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.c-leg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.c-green { background-color: var(--accent); }
+.c-cyan { background-color: var(--predict); }
+.c-purple { background-color: var(--text-2); }
+
+.chart-summary-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.c-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.cs-k { font-size: 10px; color: var(--text-3); }
+.cs-v { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+
+.chart-canvas-wrapper {
+  flex: 1;
+  min-height: 100px;
+  position: relative;
+}
+
+#analyticsChartCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   16. System Logs Panel
+   -------------------------------------------------------------------------- */
+.panel-system-logs {
+  display: flex;
+  flex-direction: column;
+}
+
+.link-view-all {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-view-all:hover {
+  color: var(--text);
+}
+
+.logs-feed-container {
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  max-height: 160px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.log-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--rule-subtle);
+}
+
+.log-time {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.log-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-green { background-color: var(--ok); }
+.dot-cyan { background-color: var(--predict); }
+.dot-orange { background-color: var(--warn); }
+.dot-red { background-color: var(--fault); }
+
+.log-msg {
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
+   17. Modals (Flat, No Halo Glow)
+   -------------------------------------------------------------------------- */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(17, 19, 21, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: none;
+}
+
+.modal-card {
+  width: 540px;
+  max-width: 90vw;
+  background-color: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.btn-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-modal-close:hover {
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* --------------------------------------------------------------------------
+   18. Responsive Layout (1366x768 and 1920x1080)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1400px) {
+  .row-mid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .row-bot {
+    grid-template-columns: 1fr 1fr;
+  }
+  .panel-system-logs {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 1024px) {
+  .row-top {
+    grid-template-columns: 1fr;
+  }
+  .row-mid {
+    grid-template-columns: 1fr;
+  }
+  .row-bot {
+    grid-template-columns: 1fr;
+  }
+  .panel-system-logs {
+    grid-column: auto;
+  }
+}
