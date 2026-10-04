@@ -49,37 +49,48 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 1. Initialize Theme Engine (Dark / Light)
-  initTheme();
+  try { initTheme(); } catch (e) { console.warn('initTheme notice:', e); }
 
-  // 2. Initialize Chart Engine
-  state.chartEngine = new TelemetryChartEngine('analyticsChartCanvas');
+  // 2. Initialize Real-Time Clocks
+  try { initClocks(); } catch (e) { console.warn('initClocks notice:', e); }
 
-  // 3. Initialize Real-Time Clocks
-  initClocks();
+  // 3. Setup All Interactive Controls, D-Pad, Buttons, Tabs & Modals FIRST
+  try { setupAllButtonsAndControls(); } catch (e) { console.warn('setupControls notice:', e); }
 
-  // 4. Initialize Three.js 3D Space Scene
-  state.space3DControls = initThreeJSSpace();
+  // 4. Setup Disturbance Toggles & Sliders
+  try { setupDisturbances(); } catch (e) { console.warn('setupDisturbances notice:', e); }
 
-  // 5. Initialize Target Preview
-  state.previewRenderer = initTargetPreview();
+  // 5. Setup Environment & Target Settings
+  try { setupTargetSettings(); } catch (e) { console.warn('setupTargetSettings notice:', e); }
 
-  // 6. Connect Real-Time WebSocket Telemetry
-  connectWebSocket();
+  // 6. Setup Sidebar, Navigation & Presets
+  try { setupNavigationAndPresets(); } catch (e) { console.warn('setupNavigation notice:', e); }
 
-  // 7. Setup All Interactive Controls, D-Pad, Buttons, Tabs & Modals
-  setupAllButtonsAndControls();
+  // 7. Setup Keyboard Shortcuts (Space, R, C, T)
+  try { setupKeyboardShortcuts(); } catch (e) { console.warn('setupKeyboard notice:', e); }
 
-  // 8. Setup Disturbance Toggles & Sliders
-  setupDisturbances();
+  // 8. Initialize Real-Time Simulation Engine & WebSocket
+  try {
+    initClientSimulation();
+    connectWebSocket();
+  } catch (e) { console.warn('sim init notice:', e); }
 
-  // 9. Setup Environment & Target Settings
-  setupTargetSettings();
+  // 9. Initialize Chart Engine
+  try {
+    if (typeof TelemetryChartEngine !== 'undefined') {
+      state.chartEngine = new TelemetryChartEngine('analyticsChartCanvas');
+    }
+  } catch (e) { console.warn('chartEngine notice:', e); }
 
-  // 10. Setup Sidebar, Navigation & Presets
-  setupNavigationAndPresets();
+  // 10. Initialize Target Preview
+  try {
+    state.previewRenderer = initTargetPreview();
+  } catch (e) { console.warn('preview notice:', e); }
 
-  // 11. Setup Keyboard Shortcuts (Space, R, C, T)
-  setupKeyboardShortcuts();
+  // 11. Initialize Three.js 3D Space Scene (Safely)
+  try {
+    state.space3DControls = initThreeJSSpace();
+  } catch (e) { console.warn('ThreeJS notice:', e); }
 
   // =========================================================================
   // 1. Theme Engine (Dark = Default, Light = Observatory Paper)
@@ -160,60 +171,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const hudTraj = document.getElementById('hudTrajectoryName');
 
     if (!container || !canvas) return null;
-
-    let scene, camera, renderer, controls;
-    let closeupScene, closeupCamera, closeupTerminalSat, closeupTargetPoint, closeupFovCone, closeupGimbalHead;
-    let earthGroup, earthMesh, cloudMesh, atmoMesh, stars;
-    let orbitLineTerminal, orbitLineTarget, lineOfSight, fovConeGroup;
-    let terminalSprite, targetSprite;
-    let gizmoScene, gizmoCamera, gizmoRenderer;
-
-    // Physical World Constants (1 unit = 1 km)
-    const R_EARTH = 6371.0;
-    const MU = 398600.4418; // km^3 / s^2
-    const AXIAL_TILT = (23.44 * Math.PI) / 180;
-
-    // Terminal Orbit (500 km Altitude)
-    const R_TERM = 6871.0;
-    const INC_TERM = (28.5 * Math.PI) / 180;
-    const N_TERM = Math.sqrt(MU / Math.pow(R_TERM, 3)); // ~0.0011083 rad/s
-    const P_TERM = new THREE.Vector3(1, 0, 0);
-    const Q_TERM = new THREE.Vector3(0, Math.cos(INC_TERM), Math.sin(INC_TERM));
-    const NORM_TERM = new THREE.Vector3().crossVectors(P_TERM, Q_TERM).normalize();
-
-    // Target Orbit (550 km Altitude, Initial Distance = 842.6 km)
-    const R_TGT = 6921.0;
-    const INC_TGT = (29.7 * Math.PI) / 180; // ~1.2 deg inclination offset for relative motion
-    const N_TGT = Math.sqrt(MU / Math.pow(R_TGT, 3)); // ~0.0010963 rad/s
-    const P_TGT = new THREE.Vector3(1, 0, 0);
-    const Q_TGT = new THREE.Vector3(0, Math.cos(INC_TGT), Math.sin(INC_TGT));
-
-    // Phase offset for exact 842.6 km initial separation
-    const cosTheta0 = (R_TERM * R_TERM + R_TGT * R_TGT - 842.6 * 842.6) / (2 * R_TERM * R_TGT);
-    const THETA_0 = Math.acos(Math.max(-1, Math.min(1, cosTheta0))); // ~7.009 deg
-
-    // Sun Vector (Normalized direction toward Sun in ECI)
-    const SUN_DIR = new THREE.Vector3(0.68, 0.42, 0.59).normalize();
-
-    // View State & Transitions (600ms Ease-In-Out)
-    let activeView = '3D'; // '3D', 'TOP', 'SIDE', 'CLOSEUP'
-    let isTransitioning = false;
-    let transitionStartTime = 0;
-    const transitionDuration = 600;
-    const camStartPos = new THREE.Vector3();
-    const camEndPos = new THREE.Vector3();
-    const lookStartPos = new THREE.Vector3();
-    const lookEndPos = new THREE.Vector3();
-    const currentLookTarget = new THREE.Vector3();
-
-    // Dynamic State Vectors
-    const r1 = new THREE.Vector3();
-    const v1 = new THREE.Vector3();
-    const r2 = new THREE.Vector3();
-    const v2 = new THREE.Vector3();
-    let orbitalSimTime = 0;
+    if (typeof THREE === 'undefined') {
+      console.warn("Three.js not loaded yet, retrying in 500ms");
+      setTimeout(() => { state.space3DControls = initThreeJSSpace(); }, 500);
+      return null;
+    }
 
     try {
+      let scene, camera, renderer, controls;
+      let closeupScene, closeupCamera, closeupTerminalSat, closeupTargetPoint, closeupFovCone, closeupGimbalHead;
+      let earthGroup, earthMesh, cloudMesh, atmoMesh, stars;
+      let orbitLineTerminal, orbitLineTarget, lineOfSight, fovConeGroup;
+      let terminalSprite, targetSprite;
+      let gizmoScene, gizmoCamera, gizmoRenderer;
+
+      // Physical World Constants (1 unit = 1 km)
+      const R_EARTH = 6371.0;
+      const MU = 398600.4418; // km^3 / s^2
+      const AXIAL_TILT = (23.44 * Math.PI) / 180;
+
+      // Terminal Orbit (500 km Altitude)
+      const R_TERM = 6871.0;
+      const INC_TERM = (28.5 * Math.PI) / 180;
+      const N_TERM = Math.sqrt(MU / Math.pow(R_TERM, 3)); // ~0.0011083 rad/s
+      const P_TERM = new THREE.Vector3(1, 0, 0);
+      const Q_TERM = new THREE.Vector3(0, Math.cos(INC_TERM), Math.sin(INC_TERM));
+      const NORM_TERM = new THREE.Vector3().crossVectors(P_TERM, Q_TERM).normalize();
+
+      // Target Orbit (550 km Altitude, Initial Distance = 842.6 km)
+      const R_TGT = 6921.0;
+      const INC_TGT = (29.7 * Math.PI) / 180; // ~1.2 deg inclination offset for relative motion
+      const N_TGT = Math.sqrt(MU / Math.pow(R_TGT, 3)); // ~0.0010963 rad/s
+      const P_TGT = new THREE.Vector3(1, 0, 0);
+      const Q_TGT = new THREE.Vector3(0, Math.cos(INC_TGT), Math.sin(INC_TGT));
+
+      // Phase offset for exact 842.6 km initial separation
+      const cosTheta0 = (R_TERM * R_TERM + R_TGT * R_TGT - 842.6 * 842.6) / (2 * R_TERM * R_TGT);
+      const THETA_0 = Math.acos(Math.max(-1, Math.min(1, cosTheta0))); // ~7.009 deg
+
+      // Sun Vector (Normalized direction toward Sun in ECI)
+      const SUN_DIR = new THREE.Vector3(0.68, 0.42, 0.59).normalize();
+
+      // View State & Transitions (600ms Ease-In-Out)
+      let activeView = '3D'; // '3D', 'TOP', 'SIDE', 'CLOSEUP'
+      let isTransitioning = false;
+      let transitionStartTime = 0;
+      const transitionDuration = 600;
+      const camStartPos = new THREE.Vector3();
+      const camEndPos = new THREE.Vector3();
+      const lookStartPos = new THREE.Vector3();
+      const lookEndPos = new THREE.Vector3();
+      const currentLookTarget = new THREE.Vector3();
+
+      // Dynamic State Vectors
+      const r1 = new THREE.Vector3();
+      const v1 = new THREE.Vector3();
+      const r2 = new THREE.Vector3();
+      const v2 = new THREE.Vector3();
+      let orbitalSimTime = 0;
+
       // 1. Renderer Setup with Logarithmic Depth Buffer
       renderer = new THREE.WebGLRenderer({
         canvas,
@@ -222,14 +238,15 @@ document.addEventListener('DOMContentLoaded', () => {
         logarithmicDepthBuffer: true,
         powerPreference: 'high-performance'
       });
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setSize(container.clientWidth || 500, container.clientHeight || 350);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
 
       // 2. Main Scene & Camera Setup (Orbit Scale: Units in km)
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1e6);
+      camera = new THREE.PerspectiveCamera(42, (container.clientWidth || 500) / (container.clientHeight || 350), 0.1, 1e6);
+
 
       // OrbitControls with Damping and Minimum Earth Altitude Clamping
       if (typeof THREE.OrbitControls !== 'undefined') {
