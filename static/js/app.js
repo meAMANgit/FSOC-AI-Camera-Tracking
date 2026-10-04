@@ -1101,7 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // 5. WebSocket Telemetry Stream Consumer & Standalone Simulation Engine
+  // 5. Standalone Real-Time Simulation Engine & WebSocket Telemetry Consumer
   // =========================================================================
   let clientSimInterval = null;
 
@@ -1109,29 +1109,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (clientSimInterval) return;
 
     let simT = 0;
-    let trueX = 330.0;
-    let trueY = 235.0;
-    let estX = 330.0;
-    let estY = 235.0;
+    let trueX = 320.0;
+    let trueY = 240.0;
+    let estX = 320.0;
+    let estY = 240.0;
     let estVx = 0.0;
     let estVy = 0.0;
-    let gPan = 0.0;
-    let gTilt = 0.0;
     let frameId = 0;
 
     // Pre-generate background starfield
     const stars = [];
-    for (let i = 0; i < 45; i++) {
+    for (let i = 0; i < 48; i++) {
       stars.push({
         x: Math.random() * 640,
         y: Math.random() * 480,
         r: Math.random() * 1.2 + 0.5,
-        alpha: Math.random() * 0.5 + 0.3
+        alpha: Math.random() * 0.6 + 0.25
       });
     }
 
     clientSimInterval = setInterval(() => {
-      // If live WebSocket is connected, pause client-side standalone loop
+      // If live backend WebSocket stream is actively providing packets, yield to backend
       if (state.wsConnected) return;
       if (state.isPaused) return;
 
@@ -1146,41 +1144,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Trajectory dynamics based on selected scenario
       const traj = state.trajectory || 'LEO_PASS';
-      let speedMult = state.targetProfiles[state.currentTargetIdx]?.speed || 1.0;
-      let targetSize = state.targetProfiles[state.currentTargetIdx]?.size || 6.0;
+      const prof = state.targetProfiles[state.currentTargetIdx] || { size: 5, speed: 2.4, color: '#E8A33D' };
+      const speedMult = prof.speed || 1.0;
+      const targetSize = prof.size || 5.0;
 
-      let targetX = 320;
-      let targetY = 240;
+      let baseTargetX = 320;
+      let baseTargetY = 240;
 
       if (traj === 'LEO_PASS') {
-        const rad = 75.0;
-        targetX = 320 + Math.sin(simT * 0.45 * speedMult) * rad;
-        targetY = 240 + Math.cos(simT * 0.35 * speedMult) * (rad * 0.65);
+        const rad = 65.0;
+        baseTargetX = 320 + Math.sin(simT * 0.45 * speedMult) * rad;
+        baseTargetY = 240 + Math.cos(simT * 0.35 * speedMult) * (rad * 0.65);
       } else if (traj === 'CIRCULAR') {
-        const rad = 60.0;
-        targetX = 320 + Math.cos(simT * 0.6 * speedMult) * rad;
-        targetY = 240 + Math.sin(simT * 0.6 * speedMult) * rad;
+        const rad = 55.0;
+        baseTargetX = 320 + Math.cos(simT * 0.6 * speedMult) * rad;
+        baseTargetY = 240 + Math.sin(simT * 0.6 * speedMult) * rad;
       } else if (traj === 'FIGURE_8') {
-        const rad = 70.0;
-        targetX = 320 + Math.sin(simT * 0.7 * speedMult) * rad;
-        targetY = 240 + Math.sin(simT * 1.4 * speedMult) * (rad * 0.5);
+        const rad = 65.0;
+        baseTargetX = 320 + Math.sin(simT * 0.65 * speedMult) * rad;
+        baseTargetY = 240 + Math.sin(simT * 1.3 * speedMult) * (rad * 0.5);
       } else {
-        // Turbulent / Random walk
-        targetX = 320 + Math.sin(simT * 0.5) * 50 + (Math.random() - 0.5) * 6;
-        targetY = 240 + Math.cos(simT * 0.5) * 40 + (Math.random() - 0.5) * 6;
+        // Turbulent
+        baseTargetX = 320 + Math.sin(simT * 0.5) * 45 + (Math.random() - 0.5) * 8;
+        baseTargetY = 240 + Math.cos(simT * 0.5) * 35 + (Math.random() - 0.5) * 8;
       }
 
-      // Add disturbance jitter if active
+      // Slew simulated gimbal closed-loop toward optical boresight (320, 240)
+      const curPan = state.gimbalPan || 0;
+      const curTilt = state.gimbalTilt || 0;
+
+      let targetX = baseTargetX - curPan * 5.0;
+      let targetY = baseTargetY + curTilt * 5.0;
+
+      // Add disturbance jitter
       if (state.jitterActive) {
-        targetX += (Math.random() - 0.5) * 8.0;
-        targetY += (Math.random() - 0.5) * 8.0;
+        targetX += (Math.random() - 0.5) * 9.0;
+        targetY += (Math.random() - 0.5) * 9.0;
       }
 
-      // Slew simulated gimbal closed-loop toward target
-      const errPan = (targetX - 320) * 0.04;
-      const errTilt = (240 - targetY) * 0.04;
-      gPan += errPan * dt * 5.0;
-      gTilt += errTilt * dt * 5.0;
+      // Closed-loop gimbal correction
+      const panCorrection = (targetX - 320) * 0.015;
+      const tiltCorrection = (240 - targetY) * 0.015;
+      state.gimbalPan = Math.max(-45, Math.min(45, curPan + panCorrection));
+      state.gimbalTilt = Math.max(-30, Math.min(30, curTilt + tiltCorrection));
+
+      // Update control panel slider readouts live
+      const panVal = document.getElementById('ctrlPanVal');
+      const tiltVal = document.getElementById('ctrlTiltVal');
+      const panSlider = document.getElementById('ctrlPanSlider');
+      const tiltSlider = document.getElementById('ctrlTiltSlider');
+      if (panVal) panVal.textContent = `${state.gimbalPan.toFixed(1)}°`;
+      if (tiltVal) tiltVal.textContent = `${state.gimbalTilt.toFixed(1)}°`;
+      if (panSlider && document.activeElement !== panSlider) panSlider.value = state.gimbalPan.toFixed(1);
+      if (tiltSlider && document.activeElement !== tiltSlider) tiltSlider.value = state.gimbalTilt.toFixed(1);
 
       trueX = targetX;
       trueY = targetY;
@@ -1188,8 +1204,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // 2D Kalman filter measurement & prediction
       const isOccluded = state.occlusionActive || false;
       let trackState = 'MEASURED';
-      let measX = trueX + (Math.random() - 0.5) * 1.5;
-      let measY = trueY + (Math.random() - 0.5) * 1.5;
+      let measX = trueX + (Math.random() - 0.5) * 1.2;
+      let measY = trueY + (Math.random() - 0.5) * 1.2;
 
       if (isOccluded) {
         trackState = 'PREDICTED';
@@ -1209,13 +1225,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const trackingError = Math.hypot(estX - trueX, estY - trueY);
       const pointingError = Math.hypot(estX - 320, estY - 240);
-      const r95 = isOccluded ? 3.2 : (0.85 + (state.noiseActive ? 0.6 : 0.0));
+      const r95 = isOccluded ? 3.2 : (0.82 + (state.noiseActive ? 0.75 : 0.0));
 
-      // 1. Render Synthetic Greyscale Optical Frame
+      // 1. Render Synthetic Greyscale Optical Sensor Feed
       ctx.fillStyle = '#080A0C';
       ctx.fillRect(0, 0, 640, 480);
 
-      // Faint background stars
+      // Faint field stars
       stars.forEach(s => {
         ctx.fillStyle = `rgba(180, 185, 195, ${s.alpha})`;
         ctx.beginPath();
@@ -1223,12 +1239,20 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fill();
       });
 
-      // Optical target beacon (Gaussian spot)
+      // Background sensor noise if active
+      if (state.noiseActive) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        for (let n = 0; n < 200; n++) {
+          ctx.fillRect(Math.random() * 640, Math.random() * 480, 1, 1);
+        }
+      }
+
+      // Optical Target Beacon Gaussian Spot
       if (!isOccluded) {
         const grad = ctx.createRadialGradient(trueX, trueY, 0, trueX, trueY, targetSize * 3);
         grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-        grad.addColorStop(0.3, 'rgba(240, 240, 255, 0.7)');
-        grad.addColorStop(0.7, 'rgba(180, 200, 240, 0.2)');
+        grad.addColorStop(0.25, 'rgba(240, 245, 255, 0.8)');
+        grad.addColorStop(0.65, 'rgba(180, 200, 240, 0.25)');
         grad.addColorStop(1, 'rgba(100, 140, 220, 0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
@@ -1236,14 +1260,14 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fill();
       }
 
-      // Assemble synthetic telemetry message
+      // Assemble telemetry packet
       const syntheticMsg = {
         frame_id: frameId,
         timestamp: simT,
         frame_state: trackState,
         track_state: isOccluded ? 'LOST' : 'TRACK',
         action_type: isOccluded ? 'KALMAN_PREDICT' : 'FAST',
-        action_cost_ms: 0.32,
+        action_cost_ms: 0.31,
         action_reason: 'Optimal closed-loop tracker',
         measured_x: measX,
         measured_y: measY,
@@ -1265,10 +1289,10 @@ document.addEventListener('DOMContentLoaded', () => {
           pointing_offset_px: pointingError,
           reasons: []
         },
-        gimbal_pan_deg: gPan,
-        gimbal_tilt_deg: gTilt,
-        gimbal_pan_rate: errPan,
-        gimbal_tilt_rate: errTilt,
+        gimbal_pan_deg: state.gimbalPan,
+        gimbal_tilt_deg: state.gimbalTilt,
+        gimbal_pan_rate: panCorrection,
+        gimbal_tilt_rate: tiltCorrection,
         true_x: trueX,
         true_y: trueY,
         tracking_error_px: trackingError,
@@ -1316,11 +1340,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.ws.onclose = () => {
         state.wsConnected = false;
-        setTimeout(connectWebSocket, 3000);
+        setTimeout(connectWebSocket, 5000);
       };
 
-      state.ws.onerror = (err) => {
-        // Fallback gracefully to standalone client simulation
+      state.ws.onerror = () => {
         state.wsConnected = false;
       };
 
@@ -1333,8 +1356,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('cameraFeedCanvas');
     const ctx = canvas ? canvas.getContext('2d') : null;
 
-    state.gimbalPan = data.gimbal_pan_deg || 0;
-    state.gimbalTilt = data.gimbal_tilt_deg || 0;
+    if (data.gimbal_pan_deg !== undefined && state.wsConnected) {
+      state.gimbalPan = data.gimbal_pan_deg;
+    }
+    if (data.gimbal_tilt_deg !== undefined && state.wsConnected) {
+      state.gimbalTilt = data.gimbal_tilt_deg;
+    }
 
     // Track State classification
     const trackState = data.frame_state || (data.track_state === 'TRACK' ? 'MEASURED' : 'LOST');
@@ -1361,8 +1388,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-
-
     // 2. Update Header & Sub-Bar Readouts
     const elFps = document.getElementById('telemFps');
     const errPx = typeof data.tracking_error_px === 'number' ? Math.abs(data.tracking_error_px) : 0.21;
@@ -1384,7 +1409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const estX = typeof data.estimated_x === 'number' ? data.estimated_x.toFixed(1) : '320.0';
     const estY = typeof data.estimated_y === 'number' ? data.estimated_y.toFixed(1) : '240.0';
 
-    if (tagTrack) tagTrack.textContent = `Target (${estX}, ${estY}) px`;
+    if (tagTrack) tagTrack.textContent = `Target (${estX}, ${estY})`;
     if (tagAction) tagAction.textContent = `${data.action_type || 'FAST'} · ${latMs.toFixed(1)} ms`;
     if (tagR95) tagR95.textContent = `640 × 480 · 4° × 3° · r₉₅: ${(data.uncertainty_r95 || 1.2).toFixed(2)} px`;
     if (tagRes) tagRes.textContent = `Res: ${Math.abs(data.pointing_error_px || 0.4).toFixed(2)} px`;
@@ -1553,22 +1578,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const fovVal = document.getElementById('ctrlFovVal');
     const feedFov = document.getElementById('feedFovText');
 
+    // Gimbal Slew Helper
+    function sendGimbalSlew(panRate, tiltRate) {
+      state.gimbalPan = Math.max(-45, Math.min(45, (state.gimbalPan || 0) + panRate * 1.5));
+      state.gimbalTilt = Math.max(-30, Math.min(30, (state.gimbalTilt || 0) + tiltRate * 1.5));
+      
+      const pSlider = document.getElementById('ctrlPanSlider');
+      const tSlider = document.getElementById('ctrlTiltSlider');
+      const pVal = document.getElementById('ctrlPanVal');
+      const tVal = document.getElementById('ctrlTiltVal');
+      if (pSlider && document.activeElement !== pSlider) pSlider.value = state.gimbalPan.toFixed(1);
+      if (tSlider && document.activeElement !== tSlider) tSlider.value = state.gimbalTilt.toFixed(1);
+      if (pVal) pVal.textContent = `${state.gimbalPan.toFixed(1)}°`;
+      if (tVal) tVal.textContent = `${state.gimbalTilt.toFixed(1)}°`;
+
+      fetch('/api/gimbal_slew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pan_rate: panRate, tilt_rate: tiltRate, duration: 0.3 })
+      }).catch(() => {});
+    }
+
     if (panSlider) {
       panSlider.addEventListener('input', (e) => {
-        if (panVal) panVal.textContent = `${e.target.value}°`;
-        sendGimbalSlew(parseFloat(e.target.value) * 0.1, 0);
+        state.gimbalPan = parseFloat(e.target.value);
+        if (panVal) panVal.textContent = `${state.gimbalPan.toFixed(1)}°`;
+        sendGimbalSlew(0, 0);
       });
     }
 
     if (tiltSlider) {
       tiltSlider.addEventListener('input', (e) => {
-        if (tiltVal) tiltVal.textContent = `${e.target.value}°`;
-        sendGimbalSlew(0, parseFloat(e.target.value) * 0.1);
+        state.gimbalTilt = parseFloat(e.target.value);
+        if (tiltVal) tiltVal.textContent = `${state.gimbalTilt.toFixed(1)}°`;
+        sendGimbalSlew(0, 0);
       });
     }
 
     if (fovSlider) {
       fovSlider.addEventListener('input', (e) => {
+        state.fov = parseFloat(e.target.value);
         if (fovVal) fovVal.textContent = `${e.target.value}°`;
         if (feedFov) feedFov.textContent = `${e.target.value}° × ${(parseFloat(e.target.value) * 0.75).toFixed(1)}°`;
       });
@@ -1597,26 +1646,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (tabSpeed) {
       tabSpeed.addEventListener('input', (e) => {
-        if (tabSpeedVal) tabSpeedVal.textContent = `${e.target.value} km/s`;
-        if (inputTargetSpeed) inputTargetSpeed.value = e.target.value;
+        const val = parseFloat(e.target.value);
+        if (tabSpeedVal) tabSpeedVal.textContent = `${val} km/s`;
+        if (inputTargetSpeed) inputTargetSpeed.value = val;
+        if (state.targetProfiles[state.currentTargetIdx]) state.targetProfiles[state.currentTargetIdx].speed = val;
         fetch('/api/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_speed: parseFloat(e.target.value) })
-        }).catch(err => console.warn(err));
+          body: JSON.stringify({ target_speed: val })
+        }).catch(() => {});
       });
     }
 
     if (tabSize) {
       tabSize.addEventListener('input', (e) => {
-        if (tabSizeVal) tabSizeVal.textContent = `${e.target.value} px`;
-        if (sliderTargetSize) sliderTargetSize.value = e.target.value;
-        if (lblTargetSizeVal) lblTargetSizeVal.textContent = `${e.target.value} px`;
+        const val = parseFloat(e.target.value);
+        if (tabSizeVal) tabSizeVal.textContent = `${val} px`;
+        if (sliderTargetSize) sliderTargetSize.value = val;
+        if (lblTargetSizeVal) lblTargetSizeVal.textContent = `${val} px`;
+        if (state.targetProfiles[state.currentTargetIdx]) state.targetProfiles[state.currentTargetIdx].size = val;
         fetch('/api/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_size: parseFloat(e.target.value) })
-        }).catch(err => console.warn(err));
+          body: JSON.stringify({ target_size: val })
+        }).catch(() => {});
       });
     }
 
@@ -1626,16 +1679,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Gimbal Slew API Helper
-    function sendGimbalSlew(panRate, tiltRate) {
-      fetch('/api/gimbal_slew', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pan_rate: panRate, tilt_rate: tiltRate, duration: 0.3 })
-      }).catch(err => console.warn(err));
-    }
-
-    // D-Pad Slew
+    // D-Pad Slew Joystick
     let joystickInterval = null;
     function bindDpadButton(elId, panRate, tiltRate, msg) {
       const btn = document.getElementById(elId);
@@ -1675,6 +1719,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const dpadCenter = document.getElementById('btnDpadCenter');
     if (dpadCenter) {
       dpadCenter.addEventListener('click', () => {
+        state.gimbalPan = 0;
+        state.gimbalTilt = 0;
         sendGimbalSlew(0, 0);
         addSystemLog('Gimbal centered on optical boresight', 'green');
       });
@@ -1714,16 +1760,24 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_running: !state.isPaused })
-      });
+      }).catch(() => {});
       addSystemLog(state.isPaused ? 'Simulation paused' : 'Simulation resumed', 'orange');
     };
 
     window.resetSimulation = function() {
-      fetch('/api/reset?trajectory=' + state.trajectory, { method: 'POST' });
+      state.gimbalPan = 0;
+      state.gimbalTilt = 0;
+      state.elapsedSeconds = 0;
+      if (state.chartEngine) state.chartEngine.history = [];
+      state.frameStateHistory = [];
+      sendGimbalSlew(0, 0);
+      fetch('/api/reset?trajectory=' + state.trajectory, { method: 'POST' }).catch(() => {});
       addSystemLog('Simulation & gimbal reset to initial state', 'green');
     };
 
     window.centerOpticalBoresight = function() {
+      state.gimbalPan = 0;
+      state.gimbalTilt = 0;
       sendGimbalSlew(0, 0);
       addSystemLog('Optical target tracking re-centered', 'green');
     };
@@ -1774,13 +1828,18 @@ document.addEventListener('DOMContentLoaded', () => {
           tag.textContent = !isEnabled ? 'Off' : val > 0.6 * factor ? 'High' : val > 0.25 * factor ? 'Med' : 'Low';
         }
 
+        if (apiKey === 'turbulence') state.turbulence = val;
+        if (apiKey === 'jitter') state.jitterActive = isEnabled && val > 0;
+        if (apiKey === 'noise_std') state.noiseActive = isEnabled && val > 0;
+        if (apiKey === 'target_speed') state.targetSpeedDisturb = val;
+
         const payload = {};
         payload[apiKey] = val;
         fetch('/api/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        }).catch(err => console.warn(err));
+        }).catch(() => {});
 
         addSystemLog(`Disturbance [${apiKey}] updated (${tag ? tag.textContent : val})`, 'orange');
       };
@@ -1801,17 +1860,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnTriggerCloud) {
       btnTriggerCloud.addEventListener('click', () => {
-        fetch('/api/trigger_occlusion?duration=1.5', { method: 'POST' });
+        state.occlusionActive = true;
         if (tagCloud) tagCloud.textContent = '1.5s';
-        setTimeout(() => { if (tagCloud) tagCloud.textContent = 'None'; }, 1500);
+        setTimeout(() => {
+          state.occlusionActive = false;
+          if (tagCloud) tagCloud.textContent = 'None';
+        }, 1500);
+        fetch('/api/trigger_occlusion?duration=1.5', { method: 'POST' }).catch(() => {});
         addSystemLog('Cloud obstruction pulse injected (1.5s duration)', 'orange');
       });
     }
 
     if (toggleCloud) {
       toggleCloud.addEventListener('change', (e) => {
+        state.occlusionActive = e.target.checked;
         if (e.target.checked) {
-          fetch('/api/trigger_occlusion?duration=5.0', { method: 'POST' });
+          fetch('/api/trigger_occlusion?duration=5.0', { method: 'POST' }).catch(() => {});
           if (tagCloud) tagCloud.textContent = 'Active';
           addSystemLog('Continuous cloud occlusion active', 'orange');
         } else {
@@ -1828,25 +1892,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const quickHotPixel = document.getElementById('btnQuickHotPixel');
 
     if (quickNoise) quickNoise.addEventListener('click', () => {
-      fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ noise_std: 15.0 }) });
+      state.noiseActive = true;
+      setTimeout(() => { state.noiseActive = false; }, 2500);
+      fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ noise_std: 15.0 }) }).catch(() => {});
       addSystemLog('Sensor Noise pulse (15σ) injected', 'orange');
     });
 
     if (quickJitter) quickJitter.addEventListener('click', () => {
-      fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ jitter: 0.04 }) });
+      state.jitterActive = true;
+      setTimeout(() => { state.jitterActive = false; }, 2500);
+      fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ jitter: 0.04 }) }).catch(() => {});
       addSystemLog('Platform micro-jitter pulse injected', 'orange');
     });
 
     if (quickCloud) quickCloud.addEventListener('click', () => {
-      fetch('/api/trigger_occlusion?duration=2.0', { method: 'POST' });
+      state.occlusionActive = true;
+      setTimeout(() => { state.occlusionActive = false; }, 2000);
+      fetch('/api/trigger_occlusion?duration=2.0', { method: 'POST' }).catch(() => {});
       addSystemLog('Heavy cloud occlusion (2.0s) injected', 'orange');
     });
 
     if (quickHotPixel) quickHotPixel.addEventListener('click', () => {
-      fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ hot_pixels: 6 }) });
+      state.hotPixelsActive = true;
+      fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ hot_pixels: 6 }) }).catch(() => {});
       addSystemLog('Sensor defect hot pixels generated', 'orange');
     });
   }
+
 
   // =========================================================================
   // 8. Environment & Target Settings
