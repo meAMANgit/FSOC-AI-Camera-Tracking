@@ -12,13 +12,13 @@ document.addEventListener('DOMContentLoaded', () => {
     wsConnected: false,
     isPaused: false,
     simTime: 0,
-    elapsedSeconds: 102,
+    elapsedSeconds: 0,
     chartEngine: null,
     viewMode: '3D',
     trajectory: 'CIRCULAR',
-    fps: 59.8,
-    gimbalPan: 12.4,
-    gimbalTilt: -3.2,
+    fps: 30.0,
+    gimbalPan: 0.0,
+    gimbalTilt: 0.0,
     targetColor: '#E8A33D',
     activeTab: 'camera',
     currentTargetIdx: 0,
@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { name: 'Atmospheric UAV Terminal', type: 'UAV Terminal', size: 8, color: '#E0604E', speed: 0.9 }
     ],
     logHistory: [],
-    frameStateHistory: [], // Buffer up to 300 frames for Evidence Strip
+    frameStateHistory: new Array(40).fill('MEASURED'), // Buffer up to 300 frames for Evidence Strip
     lastPacketTime: Date.now(),
     space3DControls: null,
     previewRenderer: null
@@ -1146,8 +1146,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     clientSimInterval = setInterval(() => {
-      // If live backend WebSocket stream is actively providing packets, yield to backend
-      if (state.wsConnected) return;
+      // If live backend WebSocket stream is actively providing packets (<300ms old), yield to backend
+      if (state.wsConnected && (Date.now() - state.lastPacketTime) < 300) return;
       if (state.isPaused) return;
 
       const canvas = document.getElementById('cameraFeedCanvas');
@@ -1523,61 +1523,94 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Scientific HUD Overlays: 1px hairline lines, amber target box, predict dashed, boresight at (320, 240)
+  // Scientific HUD Overlays: High-contrast 1px hairline lines, glowing boresight, target bracket, and prediction ellipse
   function renderHUDOverlays(ctx, data, trackState) {
     const estX = typeof data.estimated_x === 'number' ? data.estimated_x : 320;
     const estY = typeof data.estimated_y === 'number' ? data.estimated_y : 240;
-    const r95 = Math.max(6, (data.uncertainty_r95 || 1.2) * 2.5);
+    const r95 = Math.max(8, (data.uncertainty_r95 || 1.2) * 3.5);
 
     const isLight = document.documentElement.getAttribute('data-theme') === 'light';
     const accentColor = isLight ? '#B8570F' : '#E8A33D';
     const predictColor = isLight ? '#3D6A93' : '#86A9C9';
-    const text3Color = isLight ? 'rgba(140, 135, 125, 0.5)' : 'rgba(110, 106, 98, 0.5)';
+    const okColor = isLight ? '#2F7D3A' : '#74B97A';
+    const boresightColor = isLight ? 'rgba(80, 85, 95, 0.7)' : 'rgba(140, 160, 185, 0.75)';
 
     ctx.save();
 
-    // 1. Boresight Crosshair (320, 240) in --text-3 at 50% opacity
-    ctx.strokeStyle = text3Color;
+    // 1. Center Optical Boresight Reticle (320, 240)
+    ctx.strokeStyle = boresightColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(320 - 20, 240); ctx.lineTo(320 + 20, 240);
-    ctx.moveTo(320, 240 - 20); ctx.lineTo(320, 240 + 20);
+    // Crosshair with center gap
+    ctx.moveTo(320 - 32, 240); ctx.lineTo(320 - 6, 240);
+    ctx.moveTo(320 + 6, 240); ctx.lineTo(320 + 32, 240);
+    ctx.moveTo(320, 240 - 32); ctx.lineTo(320, 240 - 6);
+    ctx.moveTo(320, 240 + 6); ctx.lineTo(320, 240 + 32);
+    // Center point
     ctx.stroke();
 
-    // 2. Predicted Position Ellipse (--predict dashed)
+    // Fine acquisition capture cone (15px radius dashed)
+    ctx.strokeStyle = 'rgba(116, 185, 122, 0.4)';
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.arc(320, 240, 16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 2. Tracking Vector from Boresight to Estimated Target
+    const distPx = Math.hypot(estX - 320, estY - 240);
+    if (distPx > 4.0) {
+      ctx.strokeStyle = 'rgba(232, 163, 61, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(320, 240);
+      ctx.lineTo(estX, estY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 3. Predicted Position Ellipse (--predict dashed)
     ctx.strokeStyle = predictColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 3]);
     ctx.beginPath();
     ctx.arc(estX, estY, r95, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 3. Target Bounding Box (1px --accent)
-    const boxSize = 22;
+    // 4. Target Bounding Bracket (Vivid Amber Box)
+    const boxSize = 28;
+    const half = boxSize / 2;
     ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(Math.round(estX - boxSize / 2) + 0.5, Math.round(estY - boxSize / 2) + 0.5, boxSize, boxSize);
+    ctx.lineWidth = 1.5;
 
-    // 4. Target Corner Ticks (1px)
-    const tickLen = 4;
+    // Corner L-brackets
+    const arm = 6;
     ctx.beginPath();
-    ctx.moveTo(estX - boxSize / 2 - 3, estY - boxSize / 2 + tickLen);
-    ctx.lineTo(estX - boxSize / 2 - 3, estY - boxSize / 2 - 3);
-    ctx.lineTo(estX - boxSize / 2 + tickLen, estY - boxSize / 2 - 3);
-
-    ctx.moveTo(estX + boxSize / 2 + 3, estY - boxSize / 2 + tickLen);
-    ctx.lineTo(estX + boxSize / 2 + 3, estY - boxSize / 2 - 3);
-    ctx.lineTo(estX + boxSize / 2 - tickLen, estY - boxSize / 2 - 3);
-
-    ctx.moveTo(estX - boxSize / 2 - 3, estY + boxSize / 2 - tickLen);
-    ctx.lineTo(estX - boxSize / 2 - 3, estY + boxSize / 2 + 3);
-    ctx.lineTo(estX - boxSize / 2 + tickLen, estY + boxSize / 2 + 3);
-
-    ctx.moveTo(estX + boxSize / 2 + 3, estY + boxSize / 2 - tickLen);
-    ctx.lineTo(estX + boxSize / 2 + 3, estY + boxSize / 2 + 3);
-    ctx.lineTo(estX + boxSize / 2 - tickLen, estY + boxSize / 2 + 3);
+    // Top-Left
+    ctx.moveTo(estX - half, estY - half + arm);
+    ctx.lineTo(estX - half, estY - half);
+    ctx.lineTo(estX - half + arm, estY - half);
+    // Top-Right
+    ctx.moveTo(estX + half - arm, estY - half);
+    ctx.lineTo(estX + half, estY - half);
+    ctx.lineTo(estX + half, estY - half + arm);
+    // Bottom-Left
+    ctx.moveTo(estX - half, estY + half - arm);
+    ctx.lineTo(estX - half, estY + half);
+    ctx.lineTo(estX - half + arm, estY + half);
+    // Bottom-Right
+    ctx.moveTo(estX + half - arm, estY + half);
+    ctx.lineTo(estX + half, estY + half);
+    ctx.lineTo(estX + half, estY + half - arm);
     ctx.stroke();
+
+    // Center target laser crosshair dot
+    ctx.fillStyle = okColor;
+    ctx.beginPath();
+    ctx.arc(estX, estY, 2.0, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
   }

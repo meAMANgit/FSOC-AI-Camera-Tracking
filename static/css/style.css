@@ -543,9 +543,10 @@ body {
   cursor: crosshair;
 }
 
-/* Greyscale video rendering overlay */
+/* High-contrast optical sensor canvas */
 .greyscale-feed {
-  filter: grayscale(100%) contrast(1.05);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 /* Camera Overlay Corner Readouts (12px Mono) */
