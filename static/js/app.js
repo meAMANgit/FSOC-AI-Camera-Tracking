@@ -1120,42 +1120,125 @@ document.addEventListener('DOMContentLoaded', () => {
   // =========================================================================
   // 5. Standalone Real-Time Simulation Engine & WebSocket Telemetry Consumer
   // =========================================================================
-  let clientSimInterval = null;
+  let simT = 0;
+  let frameId = 0;
+  let trueX = 320.0;
+  let trueY = 240.0;
+  let estX = 320.0;
+  let estY = 240.0;
+  let estVx = 0.0;
+  let estVy = 0.0;
+  let animFrameHandle = null;
 
-  function initClientSimulation() {
-    if (clientSimInterval) return;
+  // Pre-generate 64 background celestial stars
+  const stars = [];
+  for (let i = 0; i < 64; i++) {
+    stars.push({
+      x: Math.random() * 640,
+      y: Math.random() * 480,
+      r: Math.random() * 1.3 + 0.4,
+      alpha: Math.random() * 0.7 + 0.25
+    });
+  }
 
-    let simT = 0;
-    let trueX = 320.0;
-    let trueY = 240.0;
-    let estX = 320.0;
-    let estY = 240.0;
-    let estVx = 0.0;
-    let estVy = 0.0;
-    let frameId = 0;
+  // Master Synchronous Optical Sensor Frame Renderer
+  function renderOpticalSensorFrame(ctx, data, trackState) {
+    if (!ctx) return;
 
-    // Pre-generate background starfield
-    const stars = [];
-    for (let i = 0; i < 48; i++) {
-      stars.push({
-        x: Math.random() * 640,
-        y: Math.random() * 480,
-        r: Math.random() * 1.2 + 0.5,
-        alpha: Math.random() * 0.6 + 0.25
-      });
+    // 1. Deep-Space Thermal Sensor Background (640x480)
+    ctx.fillStyle = '#06080A';
+    ctx.fillRect(0, 0, 640, 480);
+
+    // 2. High-Altitude Atmospheric Sky Glow Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, 480);
+    skyGrad.addColorStop(0, 'rgba(10, 16, 26, 0.5)');
+    skyGrad.addColorStop(1, 'rgba(4, 6, 8, 0.7)');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, 640, 480);
+
+    // 3. Faint Celestial Stars
+    stars.forEach(s => {
+      ctx.fillStyle = `rgba(185, 205, 230, ${s.alpha})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 4. Sensor Shot & Thermal Readout Noise
+    const noiseLevel = state.noiseActive ? 220 : 35;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+    for (let n = 0; n < noiseLevel; n++) {
+      ctx.fillRect(Math.random() * 640, Math.random() * 480, 1, 1);
     }
 
-    clientSimInterval = setInterval(() => {
-      // If live backend WebSocket stream is actively providing packets (<300ms old), yield to backend
-      if (state.wsConnected && (Date.now() - state.lastPacketTime) < 300) return;
+    // 5. Sensor Defects (Hot Pixels pinned to FPA array)
+    const hotPixels = [
+      { x: 345, y: 230, val: 240 },
+      { x: 280, y: 260, val: 210 },
+      { x: 120, y: 180, val: 195 }
+    ];
+    hotPixels.forEach(hp => {
+      ctx.fillStyle = `rgba(255, 255, 255, ${hp.val / 255})`;
+      ctx.fillRect(hp.x, hp.y, 2, 2);
+    });
+
+    // 6. Laser Beacon Optical Spot (Airy Disk Diffraction Gaussian Gradient)
+    const isOccluded = data.is_occluded || state.occlusionActive || false;
+    const targetX = typeof data.true_x === 'number' ? data.true_x : trueX;
+    const targetY = typeof data.true_y === 'number' ? data.true_y : trueY;
+    const prof = state.targetProfiles[state.currentTargetIdx] || { size: 5, color: '#E8A33D' };
+    const spotSize = Math.max(3.5, (prof.size || 5) * (isOccluded ? 0.7 : 1.0));
+
+    if (!isOccluded) {
+      // Outer diffraction halo (Airy Ring)
+      const haloGrad = ctx.createRadialGradient(targetX, targetY, spotSize * 0.5, targetX, targetY, spotSize * 4.0);
+      haloGrad.addColorStop(0, 'rgba(255, 225, 170, 0.95)');
+      haloGrad.addColorStop(0.25, 'rgba(232, 163, 61, 0.7)');
+      haloGrad.addColorStop(0.55, 'rgba(180, 130, 60, 0.25)');
+      haloGrad.addColorStop(1, 'rgba(232, 163, 61, 0)');
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(targetX, targetY, spotSize * 4.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Intense White Laser Core
+      const coreGrad = ctx.createRadialGradient(targetX, targetY, 0, targetX, targetY, spotSize * 1.2);
+      coreGrad.addColorStop(0, '#FFFFFF');
+      coreGrad.addColorStop(0.4, '#FFF6DE');
+      coreGrad.addColorStop(1, 'rgba(255, 215, 140, 0.2)');
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(targetX, targetY, spotSize * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Occluded ghost
+      ctx.fillStyle = 'rgba(180, 180, 180, 0.15)';
+      ctx.beginPath();
+      ctx.arc(targetX, targetY, spotSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 7. Render Scientific Boresight & Target Tracking HUD Overlays
+    renderHUDOverlays(ctx, data, trackState);
+  }
+
+  function initClientSimulation() {
+    if (animFrameHandle) return;
+
+    let lastSimTime = performance.now();
+
+    function loop(currentTime) {
+      animFrameHandle = requestAnimationFrame(loop);
+
+      const dt = Math.min(0.05, (currentTime - lastSimTime) / 1000) || 0.033;
+      lastSimTime = currentTime;
+
+      // Yield to live WebSocket if it has delivered a fresh packet in last 300ms
+      if (state.wsConnected && (Date.now() - state.lastPacketTime) < 300) {
+        return;
+      }
       if (state.isPaused) return;
 
-      const canvas = document.getElementById('cameraFeedCanvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const dt = 0.033;
       simT += dt;
       frameId++;
 
@@ -1163,7 +1246,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const traj = state.trajectory || 'LEO_PASS';
       const prof = state.targetProfiles[state.currentTargetIdx] || { size: 5, speed: 2.4, color: '#E8A33D' };
       const speedMult = prof.speed || 1.0;
-      const targetSize = prof.size || 5.0;
 
       let baseTargetX = 320;
       let baseTargetY = 240;
@@ -1195,8 +1277,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Add disturbance jitter
       if (state.jitterActive) {
-        targetX += (Math.random() - 0.5) * 9.0;
-        targetY += (Math.random() - 0.5) * 9.0;
+        targetX += (Math.random() - 0.5) * 8.0;
+        targetY += (Math.random() - 0.5) * 8.0;
       }
 
       // Closed-loop gimbal correction
@@ -1244,39 +1326,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const pointingError = Math.hypot(estX - 320, estY - 240);
       const r95 = isOccluded ? 3.2 : (0.82 + (state.noiseActive ? 0.75 : 0.0));
 
-      // 1. Render Synthetic Greyscale Optical Sensor Feed
-      ctx.fillStyle = '#080A0C';
-      ctx.fillRect(0, 0, 640, 480);
-
-      // Faint field stars
-      stars.forEach(s => {
-        ctx.fillStyle = `rgba(180, 185, 195, ${s.alpha})`;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // Background sensor noise if active
-      if (state.noiseActive) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-        for (let n = 0; n < 200; n++) {
-          ctx.fillRect(Math.random() * 640, Math.random() * 480, 1, 1);
-        }
-      }
-
-      // Optical Target Beacon Gaussian Spot
-      if (!isOccluded) {
-        const grad = ctx.createRadialGradient(trueX, trueY, 0, trueX, trueY, targetSize * 3);
-        grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-        grad.addColorStop(0.25, 'rgba(240, 245, 255, 0.8)');
-        grad.addColorStop(0.65, 'rgba(180, 200, 240, 0.25)');
-        grad.addColorStop(1, 'rgba(100, 140, 220, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(trueX, trueY, targetSize * 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
       // Assemble telemetry packet
       const syntheticMsg = {
         frame_id: frameId,
@@ -1322,8 +1371,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.lastPacketTime = Date.now();
       handleTelemetryUpdate(syntheticMsg);
+    }
 
-    }, 33);
+    animFrameHandle = requestAnimationFrame(loop);
   }
 
   function connectWebSocket() {
@@ -1390,28 +1440,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     drawEvidenceStrip();
 
-    // 1. Draw Greyscale Camera Frame & Scientific HUD Overlays
+    // 1. Draw High-Fidelity Optical Sensor Frame & Scientific HUD Overlays
     if (ctx) {
-      if (data.frame_base64) {
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0, 640, 480);
-          renderHUDOverlays(ctx, data, trackState);
-        };
-        img.src = "data:image/jpeg;base64," + data.frame_base64;
-      } else {
-        // If rendered directly to canvas by standalone simulation, overlay HUD directly
-        renderHUDOverlays(ctx, data, trackState);
-      }
+      renderOpticalSensorFrame(ctx, data, trackState);
     }
 
     // 2. Update Header & Sub-Bar Readouts
     const elFps = document.getElementById('telemFps');
     const errPx = typeof data.tracking_error_px === 'number' ? Math.abs(data.tracking_error_px) : 0.21;
     const confPct = Math.round(Math.min(99, Math.max(70, 100 - (data.uncertainty_r95 || 1.2) * 5)));
-    const latMs = data.action_cost_ms || 1.2;
+    const latMs = data.action_cost_ms || 0.31;
 
-    if (elFps) elFps.textContent = `${(data.fps || 59.8).toFixed(1)} FPS`;
+    if (elFps) elFps.textContent = `${(data.fps || 30.0).toFixed(1)} FPS`;
 
     // 3. Update Camera Tag Overlays (12px Mono)
     const tagTrack = document.getElementById('camTagTrack');
@@ -1428,8 +1468,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (tagTrack) tagTrack.textContent = `Target (${estX}, ${estY})`;
     if (tagAction) tagAction.textContent = `${data.action_type || 'FAST'} · ${latMs.toFixed(1)} ms`;
-    if (tagR95) tagR95.textContent = `640 × 480 · 4° × 3° · r₉₅: ${(data.uncertainty_r95 || 1.2).toFixed(2)} px`;
-    if (tagRes) tagRes.textContent = `Res: ${Math.abs(data.pointing_error_px || 0.4).toFixed(2)} px`;
+    if (tagR95) tagR95.textContent = `640 × 480 · 4° × 3° · r₉₅: ${(data.uncertainty_r95 || 1.15).toFixed(2)} px`;
+    if (tagRes) tagRes.textContent = `Res: ${Math.abs(data.pointing_error_px || 0.21).toFixed(2)} px`;
     if (confFill) confFill.style.width = `${confPct}%`;
 
     if (feedStatus) feedStatus.textContent = trackState;
