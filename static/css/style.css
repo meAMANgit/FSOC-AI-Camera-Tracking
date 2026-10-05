@@ -2076,6 +2076,189 @@ body {
 /* --------------------------------------------------------------------------
    18. Responsive Layout (1366x768 and 1920x1080)
    -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+   19. Operational Scenarios Panel ("Where Coarse Alignment Matters")
+   -------------------------------------------------------------------------- */
+.row-scenarios {
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+
+.panel-operational-scenarios {
+  background-color: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.title-sub-tag {
+  font-style: italic;
+  font-weight: 400;
+  text-transform: none;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-left: 6px;
+}
+
+.scenarios-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sc-filter-btn {
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+
+.sc-filter-btn:hover {
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
+.sc-filter-btn.active {
+  background: var(--surface-active);
+  color: var(--text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.sc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-pink { background-color: #F06292; }
+.dot-green { background-color: #74B97A; }
+.dot-cyan { background-color: #4DD0E1; }
+.dot-gold { background-color: #FFB74D; }
+.dot-white { background-color: #ECEFF1; }
+
+.scenarios-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scenarios-diagram-wrapper {
+  position: relative;
+  width: 100%;
+  background: #070B14;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.scenarios-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+}
+
+/* SVG interactive paths and links */
+.sc-link-group {
+  cursor: pointer;
+  transition: opacity var(--duration-normal) var(--ease-standard);
+}
+
+.sc-link-group:hover .sc-beam {
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.sc-link-group:hover .sc-node-shape {
+  transform: scale(1.15);
+  transform-origin: center;
+}
+
+.sc-beam {
+  stroke-dasharray: 6, 4;
+  animation: beamPulseFlow 1.8s linear infinite;
+  transition: stroke-width var(--duration-fast);
+}
+
+@keyframes beamPulseFlow {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
+}
+
+.sc-node-group {
+  cursor: pointer;
+  transition: transform var(--duration-fast);
+}
+
+.sc-node-group:hover {
+  filter: brightness(1.2);
+}
+
+/* Link Details Drawer below the diagram */
+.scenarios-detail-drawer {
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detail-val-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-val-desc {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.35;
+}
+
+.detail-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   20. Responsive Layout (1366x768 and 1920x1080)
+   -------------------------------------------------------------------------- */
 @media (max-width: 1400px) {
   .row-mid {
     grid-template-columns: 1fr 1fr;
@@ -2101,4 +2284,9 @@ body {
   .panel-system-logs {
     grid-column: auto;
   }
+  .scenarios-detail-drawer {
+    grid-template-columns: 1fr 1fr;
+  }
 }
+
+

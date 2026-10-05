@@ -284,6 +284,189 @@
 
         </div>
 
+        <!-- ================= OPERATIONAL SCENARIOS: WHERE COARSE ALIGNMENT MATTERS ================= -->
+        <div class="grid-row row-scenarios" id="sectionOperationalScenarios">
+          <section class="card-panel panel-operational-scenarios">
+            <div class="card-header">
+              <div class="header-title-wrap">
+                <span class="panel-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                </span>
+                <h2 class="card-title">WHERE COARSE ALIGNMENT MATTERS <span class="title-sub-tag">illustrative</span></h2>
+              </div>
+              <div class="scenarios-header-controls">
+                <button class="sc-filter-btn active" data-scenario="all">All Links</button>
+                <button class="sc-filter-btn" data-scenario="uav"><span class="sc-dot dot-pink"></span> UAV ↔ Ground</button>
+                <button class="sc-filter-btn" data-scenario="sat-ground"><span class="sc-dot dot-green"></span> Satellite ↔ Ground</button>
+                <button class="sc-filter-btn" data-scenario="oisl"><span class="sc-dot dot-cyan"></span> Satellite ↔ Satellite (OISL)</button>
+                <button class="sc-filter-btn" data-scenario="geo"><span class="sc-dot dot-gold"></span> LEO ↔ GEO Relay</button>
+                <button class="sc-filter-btn" data-scenario="terrestrial"><span class="sc-dot dot-white"></span> Terrestrial FSO</button>
+              </div>
+            </div>
+
+            <div class="scenarios-body">
+              <div class="scenarios-diagram-wrapper">
+                <svg class="scenarios-svg" viewBox="0 0 1000 360" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="scSkyGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#050811"/>
+                      <stop offset="65%" stop-color="#0A182E"/>
+                      <stop offset="100%" stop-color="#0F243E"/>
+                    </linearGradient>
+                    <linearGradient id="scEarthGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#2D7A38"/>
+                      <stop offset="100%" stop-color="#164A22"/>
+                    </linearGradient>
+                    <linearGradient id="scBoxGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="rgba(13, 27, 56, 0.95)"/>
+                      <stop offset="100%" stop-color="rgba(7, 16, 34, 0.98)"/>
+                    </linearGradient>
+                  </defs>
+
+                  <!-- Deep Space Sky Background -->
+                  <rect x="0" y="0" width="1000" height="360" fill="url(#scSkyGrad)"/>
+
+                  <!-- Stars in Space Background -->
+                  <g fill="#FFFFFF" opacity="0.65">
+                    <circle cx="45" cy="180" r="0.8"/>
+                    <circle cx="95" cy="220" r="0.9"/>
+                    <circle cx="140" cy="160" r="1.1"/>
+                    <circle cx="210" cy="70" r="0.7"/>
+                    <circle cx="290" cy="120" r="1.0"/>
+                    <circle cx="340" cy="50" r="0.8"/>
+                    <circle cx="380" cy="90" r="1.2"/>
+                    <circle cx="440" cy="40" r="0.7"/>
+                    <circle cx="480" cy="80" r="1.0"/>
+                    <circle cx="560" cy="45" r="0.9"/>
+                    <circle cx="620" cy="95" r="1.1"/>
+                    <circle cx="660" cy="35" r="0.8"/>
+                    <circle cx="730" cy="75" r="1.0"/>
+                    <circle cx="770" cy="120" r="0.7"/>
+                    <circle cx="810" cy="30" r="1.2"/>
+                    <circle cx="880" cy="60" r="0.8"/>
+                    <circle cx="920" cy="110" r="1.0"/>
+                    <circle cx="950" cy="160" r="0.9"/>
+                    <circle cx="975" cy="80" r="0.7"/>
+                  </g>
+
+                  <!-- Curved Earth Surface & Atmosphere -->
+                  <path d="M -20 360 Q 500 255 1020 360 L 1020 390 L -20 390 Z" fill="url(#scEarthGrad)" stroke="#4CAF50" stroke-width="1.5"/>
+
+                  <!-- Top-Left NASA Callout Box -->
+                  <g id="scCalloutBox">
+                    <rect x="30" y="24" width="285" height="100" rx="6" fill="url(#scBoxGrad)" stroke="#1F3B64" stroke-width="1"/>
+                    <text x="44" y="46" fill="#E9E5DB" font-family="'IBM Plex Sans', sans-serif" font-size="11.5" font-weight="600">Every link starts the same way:<tspan font-weight="400" fill="#B0BEC5"> find the beacon, lock on,</tspan></text>
+                    <text x="44" y="65" fill="#B0BEC5" font-family="'IBM Plex Sans', sans-serif" font-size="11">hand over to fine pointing. NASA likened OPALS pointing</text>
+                    <text x="44" y="84" fill="#B0BEC5" font-family="'IBM Plex Sans', sans-serif" font-size="11">to keeping a laser pointer on a human hair 30 feet away</text>
+                    <text x="44" y="103" fill="#B0BEC5" font-family="'IBM Plex Sans', sans-serif" font-size="11">while walking.</text>
+                  </g>
+
+                  <!-- Link 1: UAV ↔ Ground (Pink) -->
+                  <g class="sc-link-group" id="linkGroupUav" data-scenario="uav">
+                    <line class="sc-beam" x1="160" y1="270" x2="265" y2="205" stroke="#F06292" stroke-width="1.8"/>
+                    <text x="50" y="165" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="600" fill="#F06292">UAV ↔ ground <tspan font-weight="400" font-size="11" fill="#CE93D8">· tactical, disaster links</tspan></text>
+                    <!-- UAV Drone Icon -->
+                    <g class="sc-node-shape" id="nodeUav" transform="translate(265, 205)">
+                      <rect x="-6" y="-5" width="12" height="10" rx="2" fill="#F06292"/>
+                      <line x1="-12" y1="-7" x2="12" y2="7" stroke="#F48FB1" stroke-width="2"/>
+                      <circle cx="-12" cy="-7" r="3.5" fill="none" stroke="#F48FB1" stroke-width="1"/>
+                      <circle cx="12" cy="7" r="3.5" fill="none" stroke="#F48FB1" stroke-width="1"/>
+                    </g>
+                  </g>
+
+                  <!-- Ground Station Node (Left) -->
+                  <g class="sc-node-group" id="nodeGroundStation">
+                    <polygon points="148,298 172,298 160,278" fill="#CFD8DC" stroke="#90A4AE" stroke-width="1"/>
+                    <circle cx="160" cy="270" r="10" fill="#2E7D32" stroke="#74B97A" stroke-width="2.5"/>
+                    <circle cx="160" cy="270" r="4" fill="#E9E5DB"/>
+                  </g>
+
+                  <!-- Link 2: Satellite ↔ Ground (Green) -->
+                  <g class="sc-link-group" id="linkGroupSatGround" data-scenario="sat-ground">
+                    <line class="sc-beam" x1="160" y1="270" x2="520" y2="125" stroke="#74B97A" stroke-width="1.8"/>
+                    <text x="375" y="112" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="600" fill="#74B97A">satellite ↔ ground <tspan font-weight="400" font-size="11" fill="#A5D6A7">· TBIRD, OPALS</tspan></text>
+                  </g>
+
+                  <!-- Link 3: Building ↔ Building (Terrestrial FSO - White) -->
+                  <g class="sc-link-group" id="linkGroupTerrestrial" data-scenario="terrestrial">
+                    <!-- Building 1 -->
+                    <rect x="430" y="278" width="28" height="34" rx="2" fill="#B0BEC5" stroke="#78909C" stroke-width="1"/>
+                    <circle cx="444" cy="272" r="9" fill="#ECEFF1" stroke="#CFD8DC" stroke-width="1.5"/>
+                    <!-- Building 2 -->
+                    <rect x="580" y="278" width="28" height="34" rx="2" fill="#B0BEC5" stroke="#78909C" stroke-width="1"/>
+                    <circle cx="594" cy="272" r="9" fill="#ECEFF1" stroke="#CFD8DC" stroke-width="1.5"/>
+                    <!-- Horizontal Terrestrial Beam -->
+                    <line class="sc-beam" x1="444" y1="272" x2="594" y2="272" stroke="#ECEFF1" stroke-width="1.8"/>
+                    <text x="420" y="338" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="600" fill="#ECEFF1">building ↔ building <tspan font-weight="400" font-size="11" fill="#B0BEC5">· terrestrial FSO</tspan></text>
+                  </g>
+
+                  <!-- Link 4: Satellite ↔ Satellite (OISL Mesh - Cyan) -->
+                  <g class="sc-link-group" id="linkGroupOisl" data-scenario="oisl">
+                    <line class="sc-beam" x1="520" y1="125" x2="700" y2="155" stroke="#4DD0E1" stroke-width="1.8"/>
+                    <text x="565" y="195" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="600" fill="#4DD0E1">satellite ↔ satellite <tspan font-weight="400" font-size="11" fill="#B2EBF2">· OISL mesh</tspan></text>
+                  </g>
+
+                  <!-- LEO Satellite 1 (Green) -->
+                  <g class="sc-node-group sc-node-shape" id="nodeSat1" transform="translate(520, 125)">
+                    <rect x="-8" y="-7" width="16" height="14" rx="2" fill="#E9E5DB" stroke="#74B97A" stroke-width="1.5"/>
+                    <rect x="-24" y="-3" width="16" height="6" rx="1" fill="#80CBC4"/>
+                    <rect x="8" y="-3" width="16" height="6" rx="1" fill="#80CBC4"/>
+                  </g>
+
+                  <!-- LEO Satellite 2 (Cyan Mesh Node) -->
+                  <g class="sc-node-group sc-node-shape" id="nodeSat2" transform="translate(700, 155)">
+                    <rect x="-8" y="-7" width="16" height="14" rx="2" fill="#E9E5DB" stroke="#4DD0E1" stroke-width="1.5"/>
+                    <rect x="-24" y="-3" width="16" height="6" rx="1" fill="#80DEEA"/>
+                    <rect x="8" y="-3" width="16" height="6" rx="1" fill="#80DEEA"/>
+                  </g>
+
+                  <!-- Link 5: LEO ↔ GEO Relay (ILLUMA-T ↔ LCRD - Gold) -->
+                  <g class="sc-link-group" id="linkGroupGeo" data-scenario="geo">
+                    <line class="sc-beam" x1="700" y1="155" x2="845" y2="80" stroke="#FFA726" stroke-width="1.8"/>
+                    <text x="730" y="235" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="600" fill="#FFB74D">LEO ↔ GEO relay <tspan font-weight="400" font-size="11" fill="#FFE082">· ILLUMA-T ↔ LCRD</tspan></text>
+                    <!-- GEO Relay Satellite -->
+                    <g class="sc-node-shape" id="nodeSatGeo" transform="translate(845, 80)">
+                      <rect x="-9" y="-7" width="18" height="14" rx="2" fill="#FFF8E1" stroke="#FFA726" stroke-width="1.5"/>
+                      <rect x="-27" y="-4" width="18" height="8" rx="1" fill="#FFE082"/>
+                      <rect x="9" y="-4" width="18" height="8" rx="1" fill="#FFE082"/>
+                    </g>
+                    <text x="878" y="105" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="600" fill="#FFB74D">GEO relay</text>
+                  </g>
+
+                </svg>
+              </div>
+
+              <!-- Interactive Scenario Details Drawer -->
+              <div class="scenarios-detail-drawer" id="scenariosDetailDrawer">
+                <div class="detail-col">
+                  <span class="detail-label">Active Scenario Context</span>
+                  <div class="detail-val-title" id="scDetailTitle">
+                    <span class="sc-dot dot-green" id="scDetailDot"></span>
+                    <span id="scDetailName">Satellite ↔ Ground Optical Link</span>
+                  </div>
+                  <span class="detail-val-desc" id="scDetailDesc">Direct high-throughput LEO-to-ground downlink across atmospheric boundary layer (NASA TBIRD, OPALS, ISRO).</span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Pointing Challenge</span>
+                  <span class="detail-num" id="scDetailChallenge">Angular Slew > 1.5°/s</span>
+                  <span class="detail-val-desc" id="scDetailTurbulence">Atmospheric boundary turbulence & jitter</span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Coarse PAT Window</span>
+                  <span class="detail-num" id="scDetailFov">4.0° × 3.0° FOV</span>
+                  <span class="detail-val-desc" id="scDetailHandover">Handover target: &le; 0.1 mrad</span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Mission Reference</span>
+                  <span class="detail-num" id="scDetailMission">NASA TBIRD / OPALS</span>
+                  <span class="detail-val-desc" id="scDetailSpeed">200 Gbps optical downlink</span>
+                </div>
+              </div>
+
+            </div>
+          </section>
+        </div>
+
         <!-- ================= ROW 2: MISSION STATUS + CONTROL PANEL + DISTURBANCES + PERFORMANCE ================= -->
         <div class="grid-row row-mid">
 

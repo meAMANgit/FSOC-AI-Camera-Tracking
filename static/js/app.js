@@ -78,8 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // 10. Setup Sidebar, Navigation & Presets
   setupNavigationAndPresets();
 
-  // 11. Setup Keyboard Shortcuts (Space, R, C, T)
+  // 11. Setup Operational Scenarios ("Where Coarse Alignment Matters")
+  initOperationalScenarios();
+
+  // 12. Setup Keyboard Shortcuts (Space, R, C, T)
   setupKeyboardShortcuts();
+
 
   // =========================================================================
   // 1. Theme Engine (Dark = Default, Light = Observatory Paper)
@@ -1984,8 +1988,206 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+    // Sidebar Navigation Actions
+    const navDashboard = document.getElementById('navDashboard');
+    const navSimulation = document.getElementById('navSimulation');
+    const navCamera = document.getElementById('navCamera');
+    const navTracking = document.getElementById('navTracking');
+    const navAnalytics = document.getElementById('navAnalytics');
+    const navLogs = document.getElementById('navLogs');
+    const navSettings = document.getElementById('navSettings');
+
+    function setActiveNav(btn) {
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+
+    if (navDashboard) {
+      navDashboard.addEventListener('click', () => {
+        setActiveNav(navDashboard);
+        scrollToPanel('.panel-camera-feed');
+      });
+    }
+
+    if (navSimulation) {
+      navSimulation.addEventListener('click', () => {
+        setActiveNav(navSimulation);
+        scrollToPanel('#sectionOperationalScenarios');
+      });
+    }
+
+    if (navCamera) {
+      navCamera.addEventListener('click', () => {
+        setActiveNav(navCamera);
+        scrollToPanel('.panel-camera-feed');
+      });
+    }
+
+    if (navTracking) {
+      navTracking.addEventListener('click', () => {
+        setActiveNav(navTracking);
+        scrollToPanel('.panel-3d-space');
+      });
+    }
+
+    if (navAnalytics) {
+      navAnalytics.addEventListener('click', () => {
+        setActiveNav(navAnalytics);
+        scrollToPanel('.panel-analytics-chart');
+      });
+    }
+
+    if (navLogs) {
+      navLogs.addEventListener('click', () => {
+        setActiveNav(navLogs);
+        if (logsModal) {
+          updateModalLogs();
+          logsModal.style.display = 'flex';
+        }
+      });
+    }
+
+    if (navSettings) {
+      navSettings.addEventListener('click', () => {
+        setActiveNav(navSettings);
+        if (settingsModal) settingsModal.style.display = 'flex';
+      });
+    }
+  }
+
   // =========================================================================
-  // 10. Keyboard Shortcuts (Space, R, C, T)
+  // 11. Operational Scenarios ("Where Coarse Alignment Matters")
+  // =========================================================================
+  function initOperationalScenarios() {
+    const scenarioData = {
+      'sat-ground': {
+        name: 'Satellite ↔ Ground Optical Link',
+        dotClass: 'dot-green',
+        desc: 'Direct high-throughput LEO-to-ground downlink across atmospheric boundary layer (NASA TBIRD, OPALS, ISRO).',
+        challenge: 'Angular Slew > 1.5°/s',
+        turbulence: 'Atmospheric boundary turbulence & jitter',
+        fov: '4.0° × 3.0° FOV',
+        handover: 'Handover target: ≤ 0.1 mrad',
+        mission: 'NASA TBIRD / OPALS',
+        speed: '200 Gbps optical downlink'
+      },
+      'uav': {
+        name: 'UAV ↔ Ground Tactical Link',
+        dotClass: 'dot-pink',
+        desc: 'Rapidly deployable disaster recovery & tactical optical links between dynamic airborne drones and portable ground terminals.',
+        challenge: 'Extreme platform vibration',
+        turbulence: 'Dynamic roll/pitch/yaw buffeting',
+        fov: '6.0° × 4.5° FOV',
+        handover: 'Handover target: ≤ 0.2 mrad',
+        mission: 'Tactical Airborne FSO',
+        speed: '10–40 Gbps emergency backhaul'
+      },
+      'oisl': {
+        name: 'Satellite ↔ Satellite (OISL Mesh)',
+        dotClass: 'dot-cyan',
+        desc: 'High-speed vacuum laser inter-satellite crosslinks forming low-latency orbital constellation routing mesh.',
+        challenge: 'Orbital velocity 7.8 km/s',
+        turbulence: 'Pure vacuum (zero turbulence)',
+        fov: '3.0° × 2.0° FOV',
+        handover: 'Handover target: ≤ 0.05 mrad',
+        mission: 'Starlink / Telesat OISL',
+        speed: '100–400 Gbps inter-plane'
+      },
+      'geo': {
+        name: 'LEO ↔ GEO Optical Relay',
+        dotClass: 'dot-gold',
+        desc: 'Continuous real-time relay from low-Earth orbit satellites (e.g. ISS) to high geostationary orbital hubs for 24/7 coverage.',
+        challenge: 'Range ~36,000 – 42,000 km',
+        turbulence: 'Orbital Doppler & micro-vibrations',
+        fov: '2.5° × 2.0° FOV',
+        handover: 'Handover target: ≤ 0.02 mrad',
+        mission: 'NASA ILLUMA-T ↔ LCRD',
+        speed: '1.244 Gbps bidirectional relay'
+      },
+      'terrestrial': {
+        name: 'Building ↔ Building Terrestrial FSO',
+        dotClass: 'dot-white',
+        desc: 'Line-of-sight urban campus and metro backbone connection without fiber trenching costs.',
+        challenge: 'Building sway & fog / haze',
+        turbulence: 'Thermal boundary layer scintillation',
+        fov: '2.0° × 1.5° FOV',
+        handover: 'Handover target: ≤ 0.15 mrad',
+        mission: 'Commercial Terrestrial FSO',
+        speed: '10–100 Gbps metro link'
+      }
+    };
+
+    const filterBtns = document.querySelectorAll('.sc-filter-btn');
+    const linkGroups = document.querySelectorAll('.sc-link-group');
+
+    function selectScenario(scenarioKey) {
+      // Update filter button states
+      filterBtns.forEach(btn => {
+        if (btn.getAttribute('data-scenario') === scenarioKey) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      // Update SVG link group opacities
+      linkGroups.forEach(group => {
+        const sc = group.getAttribute('data-scenario');
+        if (scenarioKey === 'all' || sc === scenarioKey) {
+          group.style.opacity = '1.0';
+          const beam = group.querySelector('.sc-beam');
+          if (beam) beam.style.strokeWidth = (sc === scenarioKey && scenarioKey !== 'all') ? '3px' : '1.8px';
+        } else {
+          group.style.opacity = '0.22';
+          const beam = group.querySelector('.sc-beam');
+          if (beam) beam.style.strokeWidth = '1.8px';
+        }
+      });
+
+      // Update Drawer details
+      const info = scenarioData[scenarioKey] || scenarioData['sat-ground'];
+      const elTitle = document.getElementById('scDetailName');
+      const elDot = document.getElementById('scDetailDot');
+      const elDesc = document.getElementById('scDetailDesc');
+      const elChallenge = document.getElementById('scDetailChallenge');
+      const elTurbulence = document.getElementById('scDetailTurbulence');
+      const elFov = document.getElementById('scDetailFov');
+      const elHandover = document.getElementById('scDetailHandover');
+      const elMission = document.getElementById('scDetailMission');
+      const elSpeed = document.getElementById('scDetailSpeed');
+
+      if (elTitle) elTitle.textContent = scenarioKey === 'all' ? 'All Operational Link Architectures' : info.name;
+      if (elDot) elDot.className = `sc-dot ${info.dotClass}`;
+      if (elDesc) elDesc.textContent = scenarioKey === 'all' ? 'Coarse alignment provides universal beacon acquisition and gimbal orientation across space, airborne, and terrestrial domains.' : info.desc;
+      if (elChallenge) elChallenge.textContent = info.challenge;
+      if (elTurbulence) elTurbulence.textContent = info.turbulence;
+      if (elFov) elFov.textContent = info.fov;
+      if (elHandover) elHandover.textContent = info.handover;
+      if (elMission) elMission.textContent = info.mission;
+      if (elSpeed) elSpeed.textContent = info.speed;
+
+      addSystemLog(`Operational scenario context: [${scenarioKey.toUpperCase()}]`, 'cyan');
+    }
+
+    // Attach click handlers to filter pills
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sc = btn.getAttribute('data-scenario');
+        selectScenario(sc);
+      });
+    });
+
+    // Attach click handlers to SVG link groups
+    linkGroups.forEach(group => {
+      group.addEventListener('click', () => {
+        const sc = group.getAttribute('data-scenario');
+        selectScenario(sc);
+      });
+    });
+  }
+
+  // =========================================================================
+  // 12. Keyboard Shortcuts (Space, R, C, T)
   // =========================================================================
   function setupKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
@@ -2017,7 +2219,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // 11. System Event Logger
+  // 13. System Event Logger
   // =========================================================================
   function addSystemLog(msg, color = 'green') {
     const list = document.getElementById('logsFeedList');
@@ -2058,3 +2260,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
