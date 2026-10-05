@@ -158,11 +158,14 @@ class WorldSimulator:
 
     def _update_trajectory_position(self, t: float):
         if self.trajectory_type == TrajectoryType.LEO_PASS:
-            x = -1.5 + self.traj_speed_dps * t
-            y = 0.6 * np.sin(0.4 * t) - 0.2
+            # Smooth continuous orbital transit across FOV (16s cycle)
+            period = 16.0
+            omega = 2.0 * np.pi / period
+            x = 2.0 * np.sin(omega * t)
+            y = 0.4 * np.sin(2.0 * omega * t) - 0.1
             self.beacon_pos_deg = np.array([x, y], dtype=np.float64)
             self.beacon_vel_deg = np.array(
-                [self.traj_speed_dps, 0.6 * 0.4 * np.cos(0.4 * t)],
+                [2.0 * omega * np.cos(omega * t), 0.8 * omega * np.cos(2.0 * omega * t)],
                 dtype=np.float64,
             )
         elif self.trajectory_type == TrajectoryType.CIRCULAR:
@@ -178,14 +181,14 @@ class WorldSimulator:
                 dtype=np.float64,
             )
         elif self.trajectory_type == TrajectoryType.FIGURE_EIGHT:
-            omega = 2.0 * np.pi / 6.0
-            x = 1.8 * np.sin(omega * t)
-            y = 1.0 * np.sin(2.0 * omega * t)
+            omega = 2.0 * np.pi / 8.0
+            x = 1.6 * np.sin(omega * t)
+            y = 0.9 * np.sin(2.0 * omega * t)
             self.beacon_pos_deg = np.array([x, y], dtype=np.float64)
             self.beacon_vel_deg = np.array(
                 [
-                    1.8 * omega * np.cos(omega * t),
-                    2.0 * omega * np.cos(2.0 * omega * t),
+                    1.6 * omega * np.cos(omega * t),
+                    1.8 * omega * np.cos(2.0 * omega * t),
                 ],
                 dtype=np.float64,
             )

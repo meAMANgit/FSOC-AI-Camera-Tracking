@@ -1212,28 +1212,31 @@ document.addEventListener('DOMContentLoaded', () => {
         simTime += 0.033;
         const pan = state.gimbalPan || 0;
         const tilt = state.gimbalTilt || 0;
-        const targetX = 320 + Math.sin(simTime * 0.7) * 85 - pan * 12;
-        const targetY = 240 + Math.cos(simTime * 0.5) * 55 - tilt * 12;
+        // Calm, high-precision coarse alignment tracking with micro-jitter (0.6 - 1.8 px)
+        const driftX = Math.sin(simTime * 0.3) * 1.4 + (Math.random() - 0.5) * 0.2;
+        const driftY = Math.cos(simTime * 0.25) * 1.1 + (Math.random() - 0.5) * 0.2;
+        const targetX = 320.0 + driftX - pan * 1.2;
+        const targetY = 240.0 + driftY - tilt * 1.2;
         const errPx = Math.hypot(targetX - 320, targetY - 240);
         handleTelemetryUpdate({
           frame_id: Math.floor(simTime * 30),
           timestamp: Date.now() / 1000,
-          frame_state: errPx < 50 ? 'MEASURED' : 'PREDICTED',
+          frame_state: errPx < 8.0 ? 'MEASURED' : 'PREDICTED',
           track_state: 'TRACK',
           action_type: 'FAST',
-          action_cost_ms: 0.32 + Math.random() * 0.05,
+          action_cost_ms: 0.31 + Math.random() * 0.03,
           estimated_x: targetX,
           estimated_y: targetY,
-          uncertainty_r95: 1.15 + Math.sin(simTime * 0.5) * 0.15,
+          uncertainty_r95: 1.15 + Math.sin(simTime * 0.4) * 0.08,
           gimbal_pan_deg: pan,
           gimbal_tilt_deg: tilt,
           tracking_error_px: errPx,
           pointing_error_px: errPx * 0.85,
           readiness: {
-            state: errPx < 25 ? 'READY' : 'COARSE_TRACK',
-            is_ready: errPx < 25,
+            state: errPx < 8.0 ? 'READY' : 'COARSE_TRACK',
+            is_ready: errPx < 8.0,
             fresh_met: true,
-            cone_met: errPx < 25,
+            cone_met: errPx < 8.0,
             assoc_met: true,
             motion_met: true,
             artifact_clean: true,
