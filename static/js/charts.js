@@ -18,9 +18,9 @@ class TelemetryChartEngine {
 
     // Pre-seed with initial high-precision telemetry observations
     const nowSec = Date.now() / 1000;
-    for (let i = 0; i < 40; i++) {
-      const t = nowSec - (40 - i) * 0.033;
-      const baseErr = 0.21 + Math.sin(i * 0.25) * 0.08 + (Math.random() * 0.05);
+    for (let i = 0; i < 60; i++) {
+      const t = nowSec - (60 - i) * 0.033;
+      const baseErr = 0.21 + Math.sin(i * 0.22) * 0.08 + (Math.random() * 0.04);
       this.history.push({
         time: t,
         trackingError: Math.max(0.05, baseErr),
@@ -36,10 +36,10 @@ class TelemetryChartEngine {
 
     this.initResizeListener();
     this.updateSummaryStats();
+    this.updateLegendUI();
     this.render();
     this.renderSparkline();
   }
-
 
   getCanvas() {
     if (!this.canvas) {
@@ -93,11 +93,46 @@ class TelemetryChartEngine {
 
   setMode(mode) {
     this.currentMode = mode;
+    this.updateLegendUI();
     this.render();
   }
 
+  updateLegendUI() {
+    const legContainer = document.querySelector('.chart-legend-items');
+    if (!legContainer) return;
+
+    if (this.currentMode === 'error') {
+      legContainer.innerHTML = `
+        <div class="c-leg"><span class="c-dot c-green"></span> Error (px)</div>
+        <div class="c-leg"><span class="c-dot c-cyan"></span> r₉₅ Uncertainty (px)</div>
+      `;
+    } else if (this.currentMode === 'fps') {
+      legContainer.innerHTML = `
+        <div class="c-leg"><span class="c-dot c-green" style="background:var(--ok);"></span> FPS (Hz)</div>
+        <div class="c-leg"><span class="c-dot c-cyan"></span> Latency (ms)</div>
+      `;
+    } else if (this.currentMode === 'pantilt') {
+      legContainer.innerHTML = `
+        <div class="c-leg"><span class="c-dot c-green"></span> Pan (mrad)</div>
+        <div class="c-leg"><span class="c-dot c-cyan"></span> Tilt (mrad)</div>
+      `;
+    } else if (this.currentMode === 'confidence') {
+      legContainer.innerHTML = `
+        <div class="c-leg"><span class="c-dot c-green" style="background:var(--ok);"></span> Confidence (%)</div>
+      `;
+    }
+  }
+
   addDataPoint(data) {
-    const errPx = typeof data.tracking_error_px === 'number' ? Math.abs(data.tracking_error_px) : 0.21;
+    let errPx = 0.21;
+    if (typeof data.tracking_error_px === 'number' && !isNaN(data.tracking_error_px)) {
+      errPx = Math.abs(data.tracking_error_px);
+    } else if (typeof data.pointing_error_px === 'number' && !isNaN(data.pointing_error_px)) {
+      errPx = Math.abs(data.pointing_error_px);
+    } else if (typeof data.estimated_x === 'number' && typeof data.estimated_y === 'number') {
+      errPx = Math.hypot(data.estimated_x - 320, data.estimated_y - 240);
+    }
+
     const panMrad = typeof data.gimbal_pan_deg === 'number' ? data.gimbal_pan_deg * 17.4533 : 216.4;
     const tiltMrad = typeof data.gimbal_tilt_deg === 'number' ? data.gimbal_tilt_deg * 17.4533 : -55.8;
 
@@ -106,10 +141,10 @@ class TelemetryChartEngine {
       trackingError: errPx,
       pan: panMrad,
       tilt: tiltMrad,
-      fps: data.fps || 59.8,
-      latency: data.action_cost_ms || 1.2,
-      confidence: data.confidence || 92,
-      r95: data.uncertainty_r95 || 1.2,
+      fps: typeof data.fps === 'number' ? data.fps : (data.action_cost_ms ? 1000 / Math.max(1, data.action_cost_ms + 30) : 30.0),
+      latency: data.action_cost_ms || 0.32,
+      confidence: Math.round(Math.min(99, Math.max(70, 100 - (data.uncertainty_r95 || 1.15) * 5))),
+      r95: data.uncertainty_r95 || 1.15,
       isLocked: data.is_ready || (data.frame_state === 'MEASURED')
     });
 
@@ -208,30 +243,44 @@ class TelemetryChartEngine {
     }
     ctx.stroke();
 
-    if (this.history.length < 2) return;
-
     // Determine series based on mode
     let series = [];
+    let yLabels = [];
     if (this.currentMode === 'error') {
       series = [
         { key: 'trackingError', color: colors.accent, maxVal: 5.0, label: 'Error' },
         { key: 'r95', color: colors.predict, maxVal: 5.0, label: 'r₉₅' }
       ];
+      yLabels = ['5.0', '2.5', '0.0'];
     } else if (this.currentMode === 'fps') {
       series = [
         { key: 'fps', color: colors.ok, maxVal: 60.0, label: 'FPS' },
         { key: 'latency', color: colors.predict, maxVal: 20.0, label: 'ms' }
       ];
+      yLabels = ['60', '30', '0'];
     } else if (this.currentMode === 'pantilt') {
       series = [
         { key: 'pan', color: colors.accent, maxVal: 500.0, label: 'Pan' },
         { key: 'tilt', color: colors.predict, maxVal: 500.0, label: 'Tilt' }
       ];
+      yLabels = ['+500', '0', '-500'];
     } else if (this.currentMode === 'confidence') {
       series = [
         { key: 'confidence', color: colors.ok, maxVal: 100.0, label: 'Conf' }
       ];
+      yLabels = ['100%', '50%', '0%'];
     }
+
+    // Draw Y-axis tick values (10px Mono)
+    ctx.font = '10px "IBM Plex Mono", monospace';
+    ctx.fillStyle = colors.text3;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(yLabels[0], 30, 12);
+    ctx.fillText(yLabels[1], 30, Math.round(height / 2));
+    ctx.fillText(yLabels[2], 30, height - 12);
+
+    if (this.history.length < 2) return;
 
     // Draw each series line (crisp 1.5px line, no blur/glow)
     series.forEach(s => {
@@ -248,7 +297,7 @@ class TelemetryChartEngine {
         const x = padX + idx * stepX;
         let val = pt[s.key] || 0;
         let norm = Math.min(1.0, Math.max(0.0, (val + (s.key === 'tilt' || s.key === 'pan' ? s.maxVal : 0)) / (s.maxVal * (s.key === 'tilt' || s.key === 'pan' ? 2 : 1))));
-        const y = height - 10 - norm * (height - 20);
+        const y = height - 12 - norm * (height - 24);
 
         if (idx === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);

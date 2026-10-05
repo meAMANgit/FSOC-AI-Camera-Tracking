@@ -218,6 +218,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let orbitalSimTime = 0;
 
     try {
+      const initW = container.clientWidth || 560;
+      const initH = container.clientHeight || 380;
+
       // 1. Renderer Setup with Logarithmic Depth Buffer
       renderer = new THREE.WebGLRenderer({
         canvas,
@@ -226,14 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
         logarithmicDepthBuffer: true,
         powerPreference: 'high-performance'
       });
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setSize(initW, initH);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
 
       // 2. Main Scene & Camera Setup (Orbit Scale: Units in km)
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1e6);
+      camera = new THREE.PerspectiveCamera(42, initW / initH, 0.1, 1e6);
 
       // OrbitControls with Damping and Minimum Earth Altitude Clamping
       if (typeof THREE.OrbitControls !== 'undefined') {
@@ -260,11 +263,11 @@ document.addEventListener('DOMContentLoaded', () => {
       scene.add(earthGroup);
 
       const textureLoader = new THREE.TextureLoader();
-      const dayMap = textureLoader.load('/static/assets/earth_day_4k.jpg');
-      const nightMap = textureLoader.load('/static/assets/earth_lights_4k.png');
-      const specularMap = textureLoader.load('/static/assets/earth_specular_4k.jpg');
-      const normalMap = textureLoader.load('/static/assets/earth_normal_4k.jpg');
-      const cloudMap = textureLoader.load('/static/assets/earth_clouds_4k.png');
+      const dayMap = textureLoader.load('static/assets/earth_day_4k.jpg');
+      const nightMap = textureLoader.load('static/assets/earth_lights_4k.png');
+      const specularMap = textureLoader.load('static/assets/earth_specular_4k.jpg');
+      const normalMap = textureLoader.load('static/assets/earth_normal_4k.jpg');
+      const cloudMap = textureLoader.load('static/assets/earth_clouds_4k.png');
 
       [dayMap, nightMap, specularMap, normalMap, cloudMap].forEach(tex => {
         if (tex) {
@@ -273,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      // Earth Surface Custom ShaderMaterial
+      // Earth Surface Custom ShaderMaterial with Logarithmic Depth Buffer support
       const earthGeo = new THREE.SphereGeometry(R_EARTH, 96, 96);
       const earthShaderMat = new THREE.ShaderMaterial({
         uniforms: {
@@ -283,6 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
           sunDirection: { value: SUN_DIR.clone() }
         },
         vertexShader: `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
           varying vec2 vUv;
           varying vec3 vNormal;
           varying vec3 vWorldPosition;
@@ -292,9 +297,12 @@ document.addEventListener('DOMContentLoaded', () => {
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
             vWorldPosition = worldPos.xyz;
             gl_Position = projectionMatrix * viewMatrix * worldPos;
+            #include <logdepthbuf_vertex>
           }
         `,
         fragmentShader: `
+          #include <common>
+          #include <logdepthbuf_pars_fragment>
           uniform sampler2D dayTexture;
           uniform sampler2D nightTexture;
           uniform sampler2D specularTexture;
@@ -304,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
           varying vec3 vWorldPosition;
 
           void main() {
+            #include <logdepthbuf_fragment>
             vec3 normal = normalize(vNormal);
             float dotNL = dot(normal, normalize(sunDirection));
 
@@ -352,6 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
           sunDirection: { value: SUN_DIR.clone() }
         },
         vertexShader: `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
           varying vec3 vNormal;
           varying vec3 vWorldPosition;
           void main() {
@@ -359,14 +370,18 @@ document.addEventListener('DOMContentLoaded', () => {
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
             vWorldPosition = worldPos.xyz;
             gl_Position = projectionMatrix * viewMatrix * worldPos;
+            #include <logdepthbuf_vertex>
           }
         `,
         fragmentShader: `
+          #include <common>
+          #include <logdepthbuf_pars_fragment>
           uniform vec3 sunDirection;
           varying vec3 vNormal;
           varying vec3 vWorldPosition;
 
           void main() {
+            #include <logdepthbuf_fragment>
             vec3 normal = normalize(vNormal);
             vec3 viewDir = normalize(cameraPosition - vWorldPosition);
             float dotNV = max(0.0, dot(normal, viewDir));
@@ -530,11 +545,10 @@ document.addEventListener('DOMContentLoaded', () => {
       lineOfSight = new THREE.Line(losGeo, losMat);
       scene.add(lineOfSight);
 
-      // 9. Camera FOV Pyramid (8% Fill, 1px Edges, Live Pan/Tilt, Green when Target inside)
+      // 9. Camera FOV Pyramid (8% Fill, 1px Edges, Reusable Buffer)
       fovConeGroup = new THREE.Group();
       scene.add(fovConeGroup);
 
-      let fovMesh, fovLines;
       const fovMeshMat = new THREE.MeshBasicMaterial({
         color: 0xE8A33D,
         transparent: true,
@@ -549,70 +563,82 @@ document.addEventListener('DOMContentLoaded', () => {
         opacity: 0.75
       });
 
-      function updateFovPyramid(isTargetInsideFov) {
-        while (fovConeGroup.children.length > 0) {
-          fovConeGroup.remove(fovConeGroup.children[0]);
-        }
+      const pyrGeo = new THREE.BufferGeometry();
+      const pyrPositions = new Float32Array(18 * 3);
+      pyrGeo.setAttribute('position', new THREE.BufferAttribute(pyrPositions, 3));
+      const fovMesh = new THREE.Mesh(pyrGeo, fovMeshMat);
+      fovConeGroup.add(fovMesh);
 
+      const edgeGeo = new THREE.BufferGeometry();
+      const edgePositions = new Float32Array(16 * 3);
+      edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
+      const fovLines = new THREE.LineSegments(edgeGeo, fovEdgeMat);
+      fovConeGroup.add(fovLines);
+
+      function updateFovPyramid(isTargetInsideFov) {
         const dist = r1.distanceTo(r2);
-        const fovLength = dist * 1.1;
+        const fovLength = Math.max(100.0, dist * 1.1);
 
         // Current Optical Pointing Direction in ECI Frame
-        const T = v1.clone().normalize(); // In-track tangent
-        const N = NORM_TERM.clone();      // Cross-track normal
-        const R = r1.clone().normalize(); // Radial up
+        const T = v1.clone().normalize();
+        const N = NORM_TERM.clone();
+        const R = r1.clone().normalize();
 
         const panRad = (state.gimbalPan * Math.PI) / 180;
         const tiltRad = (state.gimbalTilt * Math.PI) / 180;
 
-        // Commanded camera boresight direction
         const aimDir = T.clone()
           .addScaledVector(N, Math.tan(panRad))
           .addScaledVector(R, Math.tan(tiltRad))
           .normalize();
 
-        // 4 deg x 3 deg FOV spreads
         const fovHalfX = Math.tan(((4.0 * Math.PI) / 180) / 2) * fovLength;
         const fovHalfY = Math.tan(((3.0 * Math.PI) / 180) / 2) * fovLength;
 
         const fovRight = new THREE.Vector3().crossVectors(aimDir, R).normalize();
         const fovUp = new THREE.Vector3().crossVectors(fovRight, aimDir).normalize();
 
-        const pApex = r1.clone();
+        const pApex = r1;
         const pCenter = pApex.clone().addScaledVector(aimDir, fovLength);
         const c1 = pCenter.clone().addScaledVector(fovRight, fovHalfX).addScaledVector(fovUp, fovHalfY);
         const c2 = pCenter.clone().addScaledVector(fovRight, -fovHalfX).addScaledVector(fovUp, fovHalfY);
         const c3 = pCenter.clone().addScaledVector(fovRight, -fovHalfX).addScaledVector(fovUp, -fovHalfY);
         const c4 = pCenter.clone().addScaledVector(fovRight, fovHalfX).addScaledVector(fovUp, -fovHalfY);
 
-        // 4 Triangular Pyramid Faces
-        const pyrGeo = new THREE.BufferGeometry();
-        const pyrVertices = new Float32Array([
-          pApex.x, pApex.y, pApex.z, c1.x, c1.y, c1.z, c2.x, c2.y, c2.z,
-          pApex.x, pApex.y, pApex.z, c2.x, c2.y, c2.z, c3.x, c3.y, c3.z,
-          pApex.x, pApex.y, pApex.z, c3.x, c3.y, c3.z, c4.x, c4.y, c4.z,
-          pApex.x, pApex.y, pApex.z, c4.x, c4.y, c4.z, c1.x, c1.y, c1.z,
-          c1.x, c1.y, c1.z, c3.x, c3.y, c3.z, c2.x, c2.y, c2.z,
-          c1.x, c1.y, c1.z, c4.x, c4.y, c4.z, c3.x, c3.y, c3.z
-        ]);
-        pyrGeo.setAttribute('position', new THREE.BufferAttribute(pyrVertices, 3));
+        const pos = pyrGeo.attributes.position.array;
+        const verts = [
+          pApex, c1, c2,
+          pApex, c2, c3,
+          pApex, c3, c4,
+          pApex, c4, c1,
+          c1, c3, c2,
+          c1, c4, c3
+        ];
+        for (let i = 0; i < verts.length; i++) {
+          pos[i * 3] = verts[i].x;
+          pos[i * 3 + 1] = verts[i].y;
+          pos[i * 3 + 2] = verts[i].z;
+        }
+        pyrGeo.attributes.position.needsUpdate = true;
         pyrGeo.computeVertexNormals();
 
-        // Edge Lines
-        const edgeGeo = new THREE.BufferGeometry().setFromPoints([
+        const ePos = edgeGeo.attributes.position.array;
+        const eVerts = [
           pApex, c1, pApex, c2, pApex, c3, pApex, c4,
           c1, c2, c2, c3, c3, c4, c4, c1
-        ]);
+        ];
+        for (let i = 0; i < eVerts.length; i++) {
+          ePos[i * 3] = eVerts[i].x;
+          ePos[i * 3 + 1] = eVerts[i].y;
+          ePos[i * 3 + 2] = eVerts[i].z;
+        }
+        edgeGeo.attributes.position.needsUpdate = true;
 
-        const statusColor = isTargetInsideFov ? 0x74B97A : 0xE8A33D; // --ok (green) or --accent (amber)
+        const statusColor = isTargetInsideFov ? 0x74B97A : 0xE8A33D;
         fovEdgeMat.color.setHex(statusColor);
         fovMeshMat.color.setHex(statusColor);
-
-        fovMesh = new THREE.Mesh(pyrGeo, fovMeshMat);
-        fovLines = new THREE.LineSegments(edgeGeo, fovEdgeMat);
-        fovConeGroup.add(fovMesh);
-        fovConeGroup.add(fovLines);
       }
+
 
       // =====================================================================
       // 10. Scale 2: Close-Up Subscene (Metre Scale, PBR Satellite Model)
@@ -1108,48 +1134,79 @@ document.addEventListener('DOMContentLoaded', () => {
   // 5. WebSocket Telemetry Stream Consumer & Evidence Strip Updater
   // =========================================================================
   function connectWebSocket() {
+    const isFile = window.location.protocol === 'file:' || !window.location.host;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/telemetry`;
+    const wsUrl = !isFile ? `${protocol}//${window.location.host}/ws/telemetry` : null;
     const canvas = document.getElementById('cameraFeedCanvas');
     const ctx = canvas ? canvas.getContext('2d') : null;
 
-    try {
-      state.ws = new WebSocket(wsUrl);
+    if (wsUrl) {
+      try {
+        state.ws = new WebSocket(wsUrl);
 
-      state.ws.onopen = () => {
-        state.wsConnected = true;
-        const badge = document.getElementById('systemStatusBadge');
-        if (badge) {
-          badge.innerHTML = `<span class="pulse-indicator"></span><span>ONLINE</span>`;
-        }
-        addSystemLog('Telemetry WebSocket stream online (30 Hz closed-loop)', 'green');
-      };
+        state.ws.onopen = () => {
+          state.wsConnected = true;
+          const badge = document.getElementById('systemStatusBadge');
+          if (badge) {
+            badge.innerHTML = `<span class="pulse-indicator"></span><span>ONLINE</span>`;
+          }
+          addSystemLog('Telemetry WebSocket stream online (30 Hz closed-loop)', 'green');
+        };
 
-      state.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          state.lastPacketTime = Date.now();
-          handleTelemetryUpdate(data);
-        } catch (err) {
-          console.warn("WebSocket parse error:", err);
-        }
-      };
+        state.ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            state.lastPacketTime = Date.now();
+            handleTelemetryUpdate(data);
+          } catch (err) {
+            console.warn("WebSocket parse error:", err);
+          }
+        };
 
-      state.ws.onclose = () => {
-        state.wsConnected = false;
-        setTimeout(connectWebSocket, 1500);
-      };
+        state.ws.onclose = () => {
+          state.wsConnected = false;
+          setTimeout(connectWebSocket, 1500);
+        };
 
-      state.ws.onerror = (err) => {
-        console.warn("WebSocket stream notice:", err);
-      };
+        state.ws.onerror = (err) => {
+          console.warn("WebSocket stream notice:", err);
+        };
 
-    } catch (e) {
-      console.warn("WebSocket init error:", e);
+      } catch (e) {
+        console.warn("WebSocket init error:", e);
+      }
     }
+
+    // Immediate initial frame render for instantaneous UI display
+    handleTelemetryUpdate({
+      frame_id: 0,
+      timestamp: Date.now() / 1000,
+      frame_state: 'MEASURED',
+      track_state: 'TRACK',
+      action_type: 'FAST',
+      action_cost_ms: 0.32,
+      estimated_x: 320.0,
+      estimated_y: 240.0,
+      uncertainty_r95: 1.15,
+      gimbal_pan_deg: state.gimbalPan || 12.4,
+      gimbal_tilt_deg: state.gimbalTilt || -3.2,
+      tracking_error_px: 0.21,
+      pointing_error_px: 0.40,
+      readiness: {
+        state: 'READY',
+        is_ready: true,
+        fresh_met: true,
+        cone_met: true,
+        assoc_met: true,
+        motion_met: true,
+        artifact_clean: true,
+        pointing_offset_px: 0.21
+      }
+    });
 
     // Client-side simulation fallback loop for serverless / cloud deployments (Vercel)
     let simTime = 0;
+
     setInterval(() => {
       if (!state.wsConnected) {
         simTime += 0.033;
@@ -1988,77 +2045,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // =========================================================================
-  // 10. Sidebar, Navigation & Preset Handlers
-  // =========================================================================
-  function setupNavigationAndPresets() {
-    // Sidebar Navigation Actions
-    const navDashboard = document.getElementById('navDashboard');
 
-    const navSimulation = document.getElementById('navSimulation');
-    const navCamera = document.getElementById('navCamera');
-    const navTracking = document.getElementById('navTracking');
-    const navAnalytics = document.getElementById('navAnalytics');
-    const navLogs = document.getElementById('navLogs');
-    const navSettings = document.getElementById('navSettings');
-
-    function setActiveNav(btn) {
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-    }
-
-    if (navDashboard) {
-      navDashboard.addEventListener('click', () => {
-        setActiveNav(navDashboard);
-        scrollToPanel('.panel-camera-feed');
-      });
-    }
-
-    if (navSimulation) {
-      navSimulation.addEventListener('click', () => {
-        setActiveNav(navSimulation);
-        scrollToPanel('#sectionOperationalScenarios');
-      });
-    }
-
-    if (navCamera) {
-      navCamera.addEventListener('click', () => {
-        setActiveNav(navCamera);
-        scrollToPanel('.panel-camera-feed');
-      });
-    }
-
-    if (navTracking) {
-      navTracking.addEventListener('click', () => {
-        setActiveNav(navTracking);
-        scrollToPanel('.panel-3d-space');
-      });
-    }
-
-    if (navAnalytics) {
-      navAnalytics.addEventListener('click', () => {
-        setActiveNav(navAnalytics);
-        scrollToPanel('.panel-analytics-chart');
-      });
-    }
-
-    if (navLogs) {
-      navLogs.addEventListener('click', () => {
-        setActiveNav(navLogs);
-        if (logsModal) {
-          updateModalLogs();
-          logsModal.style.display = 'flex';
-        }
-      });
-    }
-
-    if (navSettings) {
-      navSettings.addEventListener('click', () => {
-        setActiveNav(navSettings);
-        if (settingsModal) settingsModal.style.display = 'flex';
-      });
-    }
-  }
 
   // =========================================================================
   // 11. Operational Scenarios ("Where Coarse Alignment Matters")
