@@ -1988,8 +1988,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // =========================================================================
+  // 10. Sidebar, Navigation & Preset Handlers
+  // =========================================================================
+  function setupNavigationAndPresets() {
     // Sidebar Navigation Actions
     const navDashboard = document.getElementById('navDashboard');
+
     const navSimulation = document.getElementById('navSimulation');
     const navCamera = document.getElementById('navCamera');
     const navTracking = document.getElementById('navTracking');
